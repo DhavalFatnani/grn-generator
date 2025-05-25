@@ -228,7 +228,7 @@ const GRNGenerator = () => {
           poMap[sku] = {
             orderedQty: parseInt(row.Quantity) || 0,
             brandSku: row["Brand SKU Code"] || "",
-            knotSku: row["KNOT SKU Code"] || "",
+            knotSku: row["KNOT SKU Code"] || row["Product Name"] || "",
             size: row.Size || "",
             colors: row.Colors || "",
             unitPrice: row["Unit Price"] || "",
