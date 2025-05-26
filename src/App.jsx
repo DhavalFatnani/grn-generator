@@ -640,25 +640,25 @@ const GRNGenerator = () => {
             <p><strong>KNOT Inventory Management System</strong></p>
             <p style="font-size: 0.8em; margin-top: 5px;">This is a computer-generated document. For queries, contact the warehouse team.</p>
         </div>
-        <script>
-            function downloadCSV() {
-                const csvData = [
-                    ['S.No', 'Brand SKU', 'KNOT SKU', 'Size', 'Color', 'Ordered Qty', 'Received Qty', 'Shortage Qty', 'Excess Qty', 'Unit Price', 'Status', 'GRN Date', 'Remarks'],
-                    ${grnData.map((row) => `['${row["S.No"]}', '${row["Brand SKU"]}', '${row["KNOT SKU"]}', '${row["Size"]}', '${row["Color"]}', '${row["Ordered Qty"]}', '${row["Received Qty"]}', '${row["Shortage Qty"]}', '${row["Excess Qty"]}', '${row["Unit Price"]}', '${row["Status"]}', '${row["GRN Date"]}', '${row["Remarks"]}']`).join(",\n                    ")}
-                ];
+        // <script>
+        //     function downloadCSV() {
+        //         const csvData = [
+        //             ['S.No', 'Brand SKU', 'KNOT SKU', 'Size', 'Color', 'Ordered Qty', 'Received Qty', 'Shortage Qty', 'Excess Qty', 'Unit Price', 'Status', 'GRN Date', 'Remarks'],
+        //             ${grnData.map((row) => `['${row["S.No"]}', '${row["Brand SKU"]}', '${row["KNOT SKU"]}', '${row["Size"]}', '${row["Color"]}', '${row["Ordered Qty"]}', '${row["Received Qty"]}', '${row["Shortage Qty"]}', '${row["Excess Qty"]}', '${row["Unit Price"]}', '${row["Status"]}', '${row["GRN Date"]}', '${row["Remarks"]}']`).join(",\n                    ")}
+        //         ];
                 
-                const csvContent = csvData.map(row => row.join(',')).join('\\n');
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                link.setAttribute('download', '${grnDocNo}.csv');
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
-        </script>
+        //         const csvContent = csvData.map(row => row.join(',')).join('\\n');
+        //         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        //         const link = document.createElement('a');
+        //         const url = URL.createObjectURL(blob);
+        //         link.setAttribute('href', url);
+        //         link.setAttribute('download', '${grnDocNo}.csv');
+        //         link.style.visibility = 'hidden';
+        //         document.body.appendChild(link);
+        //         link.click();
+        //         document.body.removeChild(link);
+        //     }
+        // </script>
     </div></body></html>`;
 
     const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8;" });
