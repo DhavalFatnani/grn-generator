@@ -20,7 +20,6 @@ const GRNGenerator = () => {
     inwardDate: "",
     warehouseNo: "",
     qcDoneBy: "",
-    qcPosition: "",
     verifiedBy: "",
     warehouseManagerName: "",
   });
@@ -349,7 +348,6 @@ const GRNGenerator = () => {
       [""],
       ["QUALITY CONTROL"],
       ["QC Done By", grnHeaderInfo.qcDoneBy],
-      ["QC Position", grnHeaderInfo.qcPosition],
       ["Verified By", grnHeaderInfo.verifiedBy],
       ["Warehouse Manager", grnHeaderInfo.warehouseManagerName],
       [""],
@@ -536,10 +534,6 @@ const GRNGenerator = () => {
                     <span class="info-value">${grnHeaderInfo.qcDoneBy}</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">Position:</span>
-                    <span class="info-value">${grnHeaderInfo.qcPosition}</span>
-                </div>
-                <div class="info-row">
                     <span class="info-label">Verified By:</span>
                     <span class="info-value">${grnHeaderInfo.verifiedBy}</span>
                 </div>
@@ -622,7 +616,6 @@ const GRNGenerator = () => {
                 <div><strong>Quality Controller</strong></div>
                 <div class="signature-line"></div>
                 <div>${grnHeaderInfo.qcDoneBy}</div>
-                <div style="font-size: 0.8em; color: #666;">${grnHeaderInfo.qcPosition}</div>
                 <div style="font-size: 0.8em; color: #666;">Date: _____________</div>
             </div>
             <div class="signature-box">
@@ -971,19 +964,6 @@ const GRNGenerator = () => {
                   className="w-full p-2 border border-gray-300 rounded-md mt-1"
                   placeholder="Or type new QC person name"
                   required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  QC Position
-                </label>
-                <input
-                  type="text"
-                  value={grnHeaderInfo.qcPosition}
-                  onChange={handleHeaderChange}
-                  name="qcPosition"
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                  placeholder="e.g., QC Inspector"
                 />
               </div>
               <div>
