@@ -27,16 +27,10 @@ const GRNGenerator = () => {
 
   // State for storing previously used values for dropdowns
   const [previousValues, setPreviousValues] = useState({
-    warehouseNos: [
-      "WH-MUM-01",
-      "WH-DEL-01",
-      "WH-BLR-01",
-      "WH-HYD-01",
-      "WH-PUN-01",
-    ],
-    qcPersons: [],
-    supervisors: [],
-    warehouseManagers: [],
+    warehouseNos: ["WH-MUM-01"],
+    qcPersons: ["Abhishek", "LuvKush", "Sandeep", "Kuldeep", "Suraj", "Krish"],
+    supervisors: ["Noorul Sheikh", "Preetam Yadav"],
+    warehouseManagers: ["Shoeb Sheikh"],
   });
 
   const handlePurchaseOrderUpload = useCallback((file) => {
