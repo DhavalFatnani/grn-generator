@@ -242,7 +242,7 @@ const GRNGenerator = () => {
 
         const shortageQty = Math.max(0, orderedQty - receivedQty);
         const excessQty = Math.max(0, receivedQty - orderedQty);
-        const notOrdered = 0;
+        let notOrdered = 0;
 
         let status = "Complete";
         let remarks = "All items received as ordered";
