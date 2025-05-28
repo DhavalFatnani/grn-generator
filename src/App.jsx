@@ -242,6 +242,7 @@ const GRNGenerator = () => {
 
         const shortageQty = Math.max(0, orderedQty - receivedQty);
         const excessQty = Math.max(0, receivedQty - orderedQty);
+        const notOrdered = 0;
 
         let status = "Complete";
         let remarks = "All items received as ordered";
@@ -249,6 +250,7 @@ const GRNGenerator = () => {
         if (!poItem) {
           status = "Not Ordered";
           remarks = "Item received but not in purchase order";
+          notOrdered += 1;
         } else if (receivedQty === 0) {
           status = "Not Received";
           remarks = "Item ordered but not received";
@@ -257,7 +259,7 @@ const GRNGenerator = () => {
           remarks = `Short by ${shortageQty} units`;
         } else if (excessQty > 0) {
           status = "Excess";
-          remarks = `Excess of ${excessQty} units`;
+          remarks = `Excess of ${excessQty + notOrdered} units`;
         }
         grn.push({
           "S.No": poItem?.sno || "N/A",
@@ -356,7 +358,7 @@ const GRNGenerator = () => {
       ["Total Received Units", summaryStats.totalReceived],
       ["Complete Items", summaryStats.complete],
       ["Shortage Items", summaryStats.shortage],
-      ["Excess Items", summaryStats.excess],
+      ["Excess Items", summaryStats.excess + summaryStats.notOrdered],
       ["Not Ordered Items", summaryStats.notOrdered],
       ["Not Received Items", summaryStats.notReceived],
       ["Receipt Accuracy %", receiptAccuracy],
@@ -561,7 +563,7 @@ const GRNGenerator = () => {
                 <div class="stat-label">Shortage Items</div>
             </div>
              <div class="stat-card excess">
-                <div class="stat-number">${summaryStats.excess}</div>
+                <div class="stat-number">${summaryStats.excess + summaryStats.notOrdered}</div>
                 <div class="stat-label">Excess Items</div>
             </div>
         </div>
@@ -1104,7 +1106,7 @@ const GRNGenerator = () => {
                 </div>
                 <div className="bg-yellow-100 p-4 rounded-lg shadow text-center">
                   <div className="text-2xl font-bold text-yellow-700">
-                    {summaryStats.excess}
+                    {summaryStats.excess+summaryStats.notOrdered}
                   </div>
                   <div className="text-sm text-yellow-600">Excess</div>
                 </div>
