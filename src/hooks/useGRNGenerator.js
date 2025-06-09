@@ -13,8 +13,12 @@ export const useGRNGenerator = () => {
     skuCodeType,
     grnHeaderInfo,
   }) => {
+    setLoading(true);
+    setErrors([]); // Clear any existing errors
+
     if (purchaseOrderData.length === 0 || putAwayData.length === 0) {
       setErrors(["Please upload both Purchase Order and Put Away sheets"]);
+      setLoading(false);
       return;
     }
 
@@ -88,11 +92,15 @@ export const useGRNGenerator = () => {
       }
     });
 
+    // Check for validation errors before proceeding
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
+      setLoading(false);
+      setGrnData([]); // Clear any existing GRN data
       return;
     }
 
+    // Validate required fields
     const requiredFields = [
       "replenishmentNumber",
       "inwardDate",
@@ -110,14 +118,13 @@ export const useGRNGenerator = () => {
     });
 
     if (missingFields.length > 0) {
-      setErrors([
-        `Please fill in all required fields: ${missingFields.join(", ")}`,
-      ]);
+      setErrors([`Please fill in all required fields: ${missingFields.join(", ")}`]);
+      setLoading(false);
+      setGrnData([]); // Clear any existing GRN data
       return;
     }
 
     try {
-      setLoading(true);
       const skuColumn =
         skuCodeType === "KNOT" ? "KNOT SKU Code" : "Brand SKU Code";
 
