@@ -18,6 +18,81 @@ export const useGRNGenerator = () => {
       return;
     }
 
+    // Add validation for logical inconsistencies
+    const validationErrors = [];
+    
+    // Create maps for validation
+    const poMap = {};
+    const receivedMap = {};
+    const qcFailMap = {};
+
+    // Build PO map
+    purchaseOrderData.forEach((row) => {
+      const sku = row[skuCodeType === "KNOT" ? "KNOT SKU Code" : "Brand SKU Code"];
+      if (sku) {
+        const normalizedSku = sku.toString().trim().toUpperCase();
+        poMap[normalizedSku] = parseInt(row.Quantity) || 0;
+      }
+    });
+
+    // Build received map
+    putAwayData.forEach((row) => {
+      const sku = row.SKU || "";
+      if (sku) {
+        const normalizedSku = sku.toString().trim().toUpperCase();
+        receivedMap[normalizedSku] = (receivedMap[normalizedSku] || 0) + 1;
+      }
+    });
+
+    // Build QC fail map
+    qcFailData.forEach((row) => {
+      const sku = row.SKU || row["Brand SKU Code"] || "";
+      if (sku) {
+        const normalizedSku = sku.toString().trim().toUpperCase();
+        const failQty = parseInt(row.Quantity || row["Failed Quantity"] || "1") || 1;
+        qcFailMap[normalizedSku] = (qcFailMap[normalizedSku] || 0) + failQty;
+      }
+    });
+
+    // Validate logical inconsistencies
+    Object.entries(qcFailMap).forEach(([sku, failQty]) => {
+      const orderedQty = poMap[sku] || 0;
+      const receivedQty = receivedMap[sku] || 0;
+      
+      // Case 1: QC fail quantity equals ordered quantity but there's a shortage
+      if (failQty === orderedQty && receivedQty < orderedQty) {
+        validationErrors.push(
+          `Logical inconsistency for SKU ${sku}: QC fail quantity (${failQty}) equals ordered quantity but there's a shortage of ${orderedQty - receivedQty} units`
+        );
+      }
+
+      // Case 2: QC fail quantity is greater than received quantity
+      if (failQty > receivedQty) {
+        validationErrors.push(
+          `Logical inconsistency for SKU ${sku}: QC fail quantity (${failQty}) is greater than received quantity (${receivedQty})`
+        );
+      }
+
+      // Case 3: QC fail quantity is greater than ordered quantity
+      if (failQty > orderedQty) {
+        validationErrors.push(
+          `Logical inconsistency for SKU ${sku}: QC fail quantity (${failQty}) is greater than ordered quantity (${orderedQty})`
+        );
+      }
+
+      // Case 4: Single unit ordered, shortage of 1, and QC fail of 1
+      if (orderedQty === 1 && receivedQty === 0 && failQty === 1) {
+        validationErrors.push(
+          `Logical inconsistency for SKU ${sku}: Cannot have QC fail of 1 unit when ordered 1 and received 0`
+        );
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
     const requiredFields = [
       "replenishmentNumber",
       "inwardDate",
