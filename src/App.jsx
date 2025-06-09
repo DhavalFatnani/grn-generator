@@ -212,12 +212,12 @@ const GRNGenerator = () => {
       <div className="container mx-auto px-4">
         <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
           <div className="text-center mb-6 flex flex-col items-center">
-            <img src="/attached_assets/logo.png" alt="KNOT Logo" className="h-16 mb-4" />
+            <img src="/logo.png" alt="KNOT Logo" className="h-16 mb-4" />
             <h1 className="text-5xl font-extrabold text-gray-900 mb-3">
               KNOT GRN Generator
             </h1>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Effortlessly generate Goods Receipt Notes.
+              Effortlessly generate Goods Receipt Notes
             </p>
           </div>
         </div>
