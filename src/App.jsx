@@ -217,7 +217,7 @@ const GRNGenerator = () => {
               KNOT GRN Generator
             </h1>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Effortlessly generate Goods Receipt Notes by uploading your Purchase Order, Put Away, and optional QC Fail data.
+              Effortlessly generate Goods Receipt Notes.
             </p>
           </div>
         </div>
