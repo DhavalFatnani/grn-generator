@@ -5,7 +5,12 @@ export const FileUploadBox = ({ title, onFileUpload, onClear, data, required }) 
     <input
       type="file"
       accept=".csv"
-      onChange={(e) => e.target.files[0] && onFileUpload(e.target.files[0])}
+      onChange={(e) => {
+        if (e.target.files[0]) {
+          onFileUpload(e.target.files[0]);
+          e.target.value = null; // Clear the input so same file can be uploaded again
+        }
+      }}
       className="hidden"
       id={`file-${title.replace(/\s+/g, "-").toLowerCase()}`}
     />

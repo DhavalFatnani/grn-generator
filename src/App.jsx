@@ -84,6 +84,17 @@ const GRNGenerator = () => {
 
   // Download handlers
   const handleDownloadCSV = useCallback(() => {
+    console.log('Download CSV clicked');
+    console.log('GRN Data:', grnData);
+    console.log('GRN Header Info:', grnHeaderInfo);
+    if (!grnData || grnData.length === 0) {
+      console.error('No GRN data available for download');
+      return;
+    }
+    if (!grnHeaderInfo || !grnHeaderInfo.brandName || !grnHeaderInfo.replenishmentNumber) {
+      console.error('Missing required header information for download');
+      return;
+    }
     downloadCSV(grnData, grnHeaderInfo);
   }, [grnData, grnHeaderInfo]);
 
@@ -303,16 +314,19 @@ const GRNGenerator = () => {
         )}
 
         {grnData.length > 0 && (
-          <GRNTable
-            grnData={grnData}
-            summaryStats={summaryStats}
-            getStatusColor={getStatusColor}
-            handleDownloadCSV={handleDownloadCSV}
-            handleDownloadGRN={handleDownloadGRN}
-            showQCStatus={settings.showQCStatus}
-            grnHeaderInfo={grnHeaderInfo}
-            skuCodeType={skuCodeType}
-          />
+          <div className="bg-white rounded-xl shadow-lg p-8">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Generated GRN</h2>
+            <GRNTable
+              grnData={grnData}
+              summaryStats={summaryStats}
+              getStatusColor={getStatusColor}
+              handleDownloadCSV={handleDownloadCSV}
+              handleDownloadGRN={handleDownloadGRN}
+              showQCStatus={settings.showQCStatus}
+              grnHeaderInfo={grnHeaderInfo}
+              skuCodeType={skuCodeType}
+            />
+          </div>
         )}
       </div>
     </div>

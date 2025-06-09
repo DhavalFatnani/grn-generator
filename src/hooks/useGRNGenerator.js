@@ -252,16 +252,24 @@ export const useGRNGenerator = () => {
           remarks = `Short by ${shortageQty} units`;
         } else if (excessQty > 0) {
           status = "Excess";
-          remarks = `Excess of ${excessQty + notOrdered} units`;
+          remarks = `Excess of ${excessQty} units`;
         }
 
         // Add QC status and quantity details to remarks
         if (qcFailInfo) {
           const failDetails = qcFailInfo.fails.map(f => 
-            `${f.qty} unit(s) - ${f.status}: ${f.remarks}`
-          ).join("; ");
+            `${f.qty} ${f.status}` // Simplified to quantity and status of failure
+          ).join(", ");
           
-          remarks = `${remarks} | QC Status: ${qcStatus} (${passQty} passed, ${totalFailQty} failed) - ${failDetails}`;
+          let qcRemark = `QC: ${qcStatus}`;
+          if (totalFailQty > 0) {
+            qcRemark += ` (${passQty} passed, ${totalFailQty} failed)`;
+            if (failDetails) {
+              qcRemark += ` - Fails: ${failDetails}`;
+            }
+          }
+          
+          remarks = `${remarks} | ${qcRemark}`;
         }
 
         grn.push({

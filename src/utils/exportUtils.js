@@ -901,7 +901,7 @@ export const downloadHTML = (grnData, grnHeaderInfo) => {
     <div class="footer">
       <div class="footer-buttons">
         <button onclick="window.print()" class="btn btn-primary">Print Document</button>
-        <button onclick="downloadCSV()" class="btn btn-secondary">Download CSV</button>
+        <button type="button" class="btn btn-secondary" onclick="downloadCsvFromData()">Download CSV</button>
       </div>
       <p class="footer-text">
         <strong>KNOT Inventory Management System</strong><br>
@@ -911,38 +911,197 @@ export const downloadHTML = (grnData, grnHeaderInfo) => {
   </div>
 
   <script>
-    function downloadCSV() {
-      const csvData = [
-        ['S.No', 'Brand SKU', 'KNOT SKU', 'Size', 'Color', 'Ordered Qty', 'Received Qty', 'Passed QC Qty', 'Failed QC Qty', 'Shortage Qty', 'Excess Qty', 'Unit Price', 'QC Status', 'Status', 'Remarks'],
-        ${grnData.map(row => [
-          row["S.No"],
-          row["Brand SKU"],
-          row["KNOT SKU"],
-          row["Size"],
-          row["Color"],
-          row["Ordered Qty"],
-          row["Received Qty"],
-          row["Passed QC Qty"] || "",
-          row["Failed QC Qty"] || "",
-          row["Shortage Qty"] || "",
-          row["Excess Qty"] || "",
-          row["Unit Price"],
-          row["QC Status"],
-          row["Status"],
-          row["Remarks"]
-        ].map(val => typeof val === "string" && val.includes(",") ? `"${val}"` : val).join(",")).join("\\n")}
-      ];
-      
-      const csvContent = csvData.join("\\n");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', '${grnDocNo}.csv');
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    // Store the data in a global variable
+    const grnDataForDownload = ${JSON.stringify(grnData).replace(/`/g, '\\`')};
+    const grnHeaderInfoForDownload = ${JSON.stringify(grnHeaderInfo).replace(/`/g, '\\`')};
+    const grnDocNoForDownload = "${grnDocNo.replace(/`/g, '\\`')}";
+
+    function downloadCsvFromData() {
+      try {
+        const today = new Date();
+        const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+        const grnDocNo = "GRN-KNOT-" + dateStr + "-" + grnHeaderInfoForDownload.brandName.replace(/\\s+/g, "") + "-" + grnHeaderInfoForDownload.replenishmentNumber;
+
+        // Calculate summary statistics
+        const summaryStats = {
+          items: {
+            total: grnDataForDownload.length,
+            complete: grnDataForDownload.filter(item => item.Status === "Complete").length,
+            shortage: grnDataForDownload.filter(item => item.Status === "Shortage").length,
+            excess: grnDataForDownload.filter(item => item.Status === "Excess").length,
+            notOrdered: grnDataForDownload.filter(item => item.Status === "Not Ordered").length,
+            notReceived: grnDataForDownload.filter(item => item.Status === "Not Received").length,
+            qcFailed: grnDataForDownload.filter(item => item["QC Status"] === "Failed").length,
+            qcPartial: grnDataForDownload.filter(item => item["QC Status"] === "Partial").length,
+            withBothIssues: grnDataForDownload.filter(item => 
+              item["QC Status"] !== "Passed" && 
+              ["Shortage", "Excess", "Not Received", "Not Ordered"].includes(item.Status)
+            ).length
+          },
+          quantities: {
+            totalOrdered: grnDataForDownload.reduce((sum, item) => sum + (parseInt(item["Ordered Qty"]) || 0), 0),
+            totalReceived: grnDataForDownload.reduce((sum, item) => sum + (parseInt(item["Received Qty"]) || 0), 0),
+            totalPassedQC: grnDataForDownload.reduce((sum, item) => sum + (parseInt(item["Passed QC Qty"]) || 0), 0),
+            totalFailedQC: grnDataForDownload.reduce((sum, item) => sum + (parseInt(item["Failed QC Qty"]) || 0), 0),
+            totalShortage: grnDataForDownload.reduce((sum, item) => sum + (parseInt(item["Shortage Qty"]) || 0), 0),
+            totalExcess: grnDataForDownload.reduce((sum, item) => sum + (parseInt(item["Excess Qty"]) || 0), 0)
+          }
+        };
+
+        // Calculate derived statistics
+        summaryStats.items.onlyQCFailed = summaryStats.items.qcFailed + summaryStats.items.qcPartial - summaryStats.items.withBothIssues;
+        summaryStats.items.onlyQuantityIssues = 
+          summaryStats.items.shortage + 
+          summaryStats.items.excess + 
+          summaryStats.items.notReceived + 
+          summaryStats.items.notOrdered - 
+          summaryStats.items.withBothIssues;
+        
+        summaryStats.items.withIssues = 
+          summaryStats.items.onlyQCFailed + 
+          summaryStats.items.onlyQuantityIssues + 
+          summaryStats.items.withBothIssues;
+
+        // Calculate percentages
+        summaryStats.percentages = {
+          complete: ((summaryStats.items.complete / summaryStats.items.total) * 100).toFixed(1),
+          qcPassRate: ((summaryStats.quantities.totalPassedQC / summaryStats.quantities.totalReceived) * 100).toFixed(1),
+          receiptAccuracy: ((summaryStats.quantities.totalReceived / summaryStats.quantities.totalOrdered) * 100).toFixed(1)
+        };
+
+        // Determine GRN status
+        let grnStatus = "Complete";
+        if (summaryStats.items.shortage > 0 || summaryStats.items.notReceived > 0) {
+          grnStatus = "Partial Receipt";
+        }
+        if (summaryStats.items.excess > 0 || summaryStats.items.notOrdered > 0) {
+          grnStatus = grnStatus === "Partial Receipt" ? "Partial Receipt with Discrepancies" : "Complete with Discrepancies";
+        }
+        if (summaryStats.items.qcFailed > 0 || summaryStats.items.qcPartial > 0) {
+          grnStatus += " (QC Issues)";
+        }
+
+        // Create CSV content
+        const csvLines = [
+          ["GOODS RECEIVED NOTE"],
+          ["Document Number", grnDocNo],
+          ["Generated Date", today.toLocaleDateString("en-GB")],
+          ["Generated Time", today.toLocaleTimeString()],
+          [""],
+          ["ORDER INFORMATION"],
+          ["Purchase Order No", grnHeaderInfoForDownload.poNumber],
+          ["Vendor Name", grnHeaderInfoForDownload.brandName],
+          ["Replenishment No", grnHeaderInfoForDownload.replenishmentNumber],
+          [""],
+          ["RECEIPT INFORMATION"],
+          ["Inward Date", grnHeaderInfoForDownload.inwardDate],
+          ["Receiving Warehouse", grnHeaderInfoForDownload.warehouseNo],
+          ["GRN Status", grnStatus],
+          [""],
+          ["QUALITY CONTROL"],
+          ["QC Done By", Array.isArray(grnHeaderInfoForDownload.qcDoneBy) ? grnHeaderInfoForDownload.qcDoneBy.join(", ") : grnHeaderInfoForDownload.qcDoneBy],
+          ["Verified By", grnHeaderInfoForDownload.verifiedBy],
+          ["Warehouse Manager", grnHeaderInfoForDownload.warehouseManagerName],
+          [""],
+          ["SUMMARY STATISTICS"],
+          ["Total Items", summaryStats.items.total],
+          ["Complete Items", summaryStats.items.complete],
+          ["Items with Issues", summaryStats.items.withIssues],
+          ["Items with QC Issues Only", summaryStats.items.onlyQCFailed],
+          ["Items with Quantity Issues Only", summaryStats.items.onlyQuantityIssues],
+          ["Items with Both QC and Quantity Issues", summaryStats.items.withBothIssues],
+          ["QC Failed Items", summaryStats.items.qcFailed],
+          ["QC Partial Items", summaryStats.items.qcPartial],
+          ["Shortage Items", summaryStats.items.shortage],
+          ["Excess Items", summaryStats.items.excess],
+          ["Not Ordered Items", summaryStats.items.notOrdered],
+          ["Not Received Items", summaryStats.items.notReceived],
+          [""],
+          ["QUANTITY STATISTICS"],
+          ["Total Ordered Units", summaryStats.quantities.totalOrdered],
+          ["Total Received Units", summaryStats.quantities.totalReceived],
+          ["Total Passed QC Units", summaryStats.quantities.totalPassedQC],
+          ["Total Failed QC Units", summaryStats.quantities.totalFailedQC],
+          ["Total Shortage Units", summaryStats.quantities.totalShortage],
+          ["Total Excess Units", summaryStats.quantities.totalExcess],
+          [""],
+          ["PERFORMANCE METRICS"],
+          ["Receipt Accuracy", summaryStats.percentages.receiptAccuracy + "%"],
+          ["QC Pass Rate", summaryStats.percentages.qcPassRate + "%"],
+          ["Complete Items Percentage", summaryStats.percentages.complete + "%"],
+          [""],
+          ["DETAILED ITEM DATA"],
+          [
+            "S.No",
+            "Brand SKU",
+            "KNOT SKU",
+            "Size",
+            "Color",
+            "Ordered Qty",
+            "Received Qty",
+            "Passed QC Qty",
+            "Failed QC Qty",
+            "Shortage Qty",
+            "Excess Qty",
+            "Unit Price",
+            "QC Status",
+            "Status",
+            "GRN Date",
+            "Remarks"
+          ]
+        ];
+
+        // Add detailed data rows
+        grnDataForDownload.forEach((row) => {
+          csvLines.push([
+            row["S.No"],
+            row["Brand SKU"],
+            row["KNOT SKU"],
+            row["Size"],
+            row["Color"],
+            row["Ordered Qty"],
+            row["Received Qty"],
+            row["Passed QC Qty"] || "",
+            row["Failed QC Qty"] || "",
+            row["Shortage Qty"] || "",
+            row["Excess Qty"] || "",
+            row["Unit Price"],
+            row["QC Status"],
+            row["Status"],
+            row["GRN Date"],
+            row["Remarks"]
+          ]);
+        });
+
+        // Helper function to properly escape CSV values
+        const escapeCSV = (value) => {
+          if (value === null || value === undefined) return "";
+          const stringValue = String(value);
+          if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\\n")) {
+            return '"' + stringValue.replace(/"/g, '""') + '"';
+          }
+          return stringValue;
+        };
+
+        // Convert to CSV string with proper escaping
+        const csvContent = csvLines.map(row => 
+          row.map(cell => escapeCSV(cell)).join(",")
+        ).join("\\n");
+
+        // Create and trigger download
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = grnDocNo + ".csv";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Error downloading CSV:", error);
+        alert("Error downloading CSV. Please try again.");
+      }
     }
   </script>
 </body>
