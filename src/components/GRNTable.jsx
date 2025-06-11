@@ -7,6 +7,7 @@ const getStatusColor = (status) => {
     Excess: "text-yellow-600 bg-yellow-50 border-yellow-200",
     "Not Ordered": "text-blue-600 bg-blue-50 border-blue-200",
     "Not Received": "text-gray-600 bg-gray-50 border-gray-200",
+    "QC Failed Receipt": "text-purple-600 bg-purple-50 border-purple-200",
   };
   return colors[status] || "text-gray-600 bg-gray-50 border-gray-200";
 };
@@ -68,6 +69,11 @@ export const GRNTable = ({
           if (item.Status !== 'Excess' && item.Status !== 'Not Ordered') {
             return false;
           }
+        } else if (activeFilters.status === 'Shortage') {
+          // Show ALL items that have shortage, regardless of status
+          if ((item["Shortage Qty"] || 0) <= 0) {
+            return false;
+          }
         } else if (item.Status !== activeFilters.status) {
           return false;
         }
@@ -114,6 +120,8 @@ export const GRNTable = ({
               return `${baseClasses} bg-gray-50 text-gray-700 border-2 border-gray-200 hover:bg-gray-100`;
             case 'Not Ordered':
               return `${baseClasses} bg-blue-50 text-blue-700 border-2 border-blue-200 hover:bg-blue-100`;
+            case 'QC Failed Receipt':
+              return `${baseClasses} bg-purple-50 text-purple-700 border-2 border-purple-200 hover:bg-purple-100`;
             default:
               return `${baseClasses} bg-blue-50 text-blue-700 border-2 border-blue-200 hover:bg-blue-100`;
           }
@@ -248,21 +256,24 @@ export const GRNTable = ({
                   onClick={() => handleFilterClick('qcStatus', 'Passed')}
                 >
                   <div className="text-sm text-gray-600">Complete</div>
-                  <div className="text-lg font-semibold text-green-600 mt-1">{summaryStats.items.complete}</div>
+                  <div className="text-lg font-semibold text-green-600 mt-1">{summaryStats.quantities.completeQC}</div>
+                  <div className="text-xs text-gray-500 mt-1">units</div>
                 </div>
                 <div 
                   className={`text-center p-2 rounded-lg cursor-pointer transition-colors ${getFilterButtonClass('qcStatus', 'Partial')}`}
                   onClick={() => handleFilterClick('qcStatus', 'Partial')}
                 >
                   <div className="text-sm text-gray-600">Partial</div>
-                  <div className="text-lg font-semibold text-yellow-600 mt-1">{summaryStats.items.partialQC}</div>
+                  <div className="text-lg font-semibold text-yellow-600 mt-1">{summaryStats.quantities.partialQC}</div>
+                  <div className="text-xs text-gray-500 mt-1">units</div>
                 </div>
                 <div 
                   className={`text-center p-2 rounded-lg cursor-pointer transition-colors ${getFilterButtonClass('qcStatus', 'Failed')}`}
                   onClick={() => handleFilterClick('qcStatus', 'Failed')}
                 >
                   <div className="text-sm text-gray-600">Failed</div>
-                  <div className="text-lg font-semibold text-red-600 mt-1">{summaryStats.items.failedQC}</div>
+                  <div className="text-lg font-semibold text-red-600 mt-1">{summaryStats.quantities.failedQC}</div>
+                  <div className="text-xs text-gray-500 mt-1">units</div>
                 </div>
               </div>
             </div>
@@ -429,7 +440,6 @@ export const GRNTable = ({
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Failed QC</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Shortage</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Excess</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Unit Price</th>
               {showQCStatus && (
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">QC Status</th>
               )}
@@ -452,7 +462,6 @@ export const GRNTable = ({
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-red-600">{row["Failed QC Qty"] || "-"}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-red-600">{row["Shortage Qty"] || "-"}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-yellow-600">{row["Excess Qty"] || "-"}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row["Unit Price"]}</td>
                   {showQCStatus && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(row["QC Status"])}`}>

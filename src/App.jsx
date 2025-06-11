@@ -149,7 +149,17 @@ const GRNGenerator = () => {
       notReceived: grnData.filter(item => item.Status === "Not Received")
         .reduce((sum, item) => sum + item["Ordered Qty"], 0),
       notOrdered: grnData.filter(item => item.Status === "Not Ordered")
-        .reduce((sum, item) => sum + item["Received Qty"], 0)
+        .reduce((sum, item) => sum + item["Received Qty"], 0),
+      // QC quantity statistics
+      completeQC: grnData.filter((item) => 
+        item.Status === "Complete" && item["QC Status"] === "Passed"
+      ).reduce((sum, item) => sum + (item["Passed QC Qty"] || 0), 0),
+      partialQC: grnData.filter((item) => 
+        item["QC Status"] === "Partial"
+      ).reduce((sum, item) => sum + (item["Failed QC Qty"] || 0), 0),
+      failedQC: grnData.filter((item) => 
+        item["QC Status"] === "Failed"
+      ).reduce((sum, item) => sum + (item["Failed QC Qty"] || 0), 0)
     }
   };
 

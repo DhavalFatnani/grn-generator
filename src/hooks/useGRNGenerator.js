@@ -59,35 +59,15 @@ export const useGRNGenerator = () => {
     });
 
     // Validate logical inconsistencies
-    Object.entries(qcFailMap).forEach(([sku, failQty]) => {
-      const orderedQty = poMap[sku] || 0;
-      const receivedQty = receivedMap[sku] || 0;
+    Object.entries(qcFailMap).forEach(([sku, failInfo]) => {
+      const failQty = failInfo.totalFailQty;
+      const receivedFromPutAwayQty = receivedMap[sku] || 0; // Quantity received from Put Away sheet
       
-      // Case 1: QC fail quantity equals ordered quantity but there's a shortage
-      if (failQty === orderedQty && receivedQty < orderedQty) {
+      // A QC fail quantity cannot be greater than the quantity physically put away.
+      // If an item was not physically put away (receivedFromPutAwayQty === 0), it cannot have a QC fail quantity > 0.
+      if (failQty > receivedFromPutAwayQty) {
         validationErrors.push(
-          `Logical inconsistency for SKU ${sku}: QC fail quantity (${failQty}) equals ordered quantity but there's a shortage of ${orderedQty - receivedQty} units`
-        );
-      }
-
-      // Case 2: QC fail quantity is greater than received quantity
-      if (failQty > receivedQty) {
-        validationErrors.push(
-          `Logical inconsistency for SKU ${sku}: QC fail quantity (${failQty}) is greater than received quantity (${receivedQty})`
-        );
-      }
-
-      // Case 3: QC fail quantity is greater than ordered quantity
-      if (failQty > orderedQty) {
-        validationErrors.push(
-          `Logical inconsistency for SKU ${sku}: QC fail quantity (${failQty}) is greater than ordered quantity (${orderedQty})`
-        );
-      }
-
-      // Case 4: Single unit ordered, shortage of 1, and QC fail of 1
-      if (orderedQty === 1 && receivedQty === 0 && failQty === 1) {
-        validationErrors.push(
-          `Logical inconsistency for SKU ${sku}: Cannot have QC fail of 1 unit when ordered 1 and received 0`
+          `Logical inconsistency for SKU ${sku}: QC fail quantity (${failQty}) is greater than put away quantity (${receivedFromPutAwayQty}). QC failed items must be physically received to be failed.`
         );
       }
     });
@@ -132,15 +112,23 @@ export const useGRNGenerator = () => {
       purchaseOrderData.forEach((row) => {
         const sku = row[skuColumn];
         if (sku) {
-          poMap[sku] = {
-            orderedQty: parseInt(row.Quantity) || 0,
-            brandSku: row["Brand SKU Code"] || "",
-            knotSku: row["KNOT SKU Code"] || row["Product Name"] || "",
-            size: row.Size || "",
-            colors: row.Colors || "",
-            unitPrice: row["Unit Price"] || "",
-            sno: row.Sno || "",
-          };
+          const normalizedSku = sku.toString().trim().toUpperCase();
+          const currentOrderedQty = parseInt(row.Quantity) || 0;
+
+          if (poMap[normalizedSku]) {
+            // If SKU already exists, sum the quantities
+            poMap[normalizedSku].orderedQty += currentOrderedQty;
+          } else {
+            // If new SKU, add it to the map with its details
+            poMap[normalizedSku] = {
+              orderedQty: currentOrderedQty,
+              brandSku: row["Brand SKU Code"] || "",
+              knotSku: row["KNOT SKU Code"] || row["Product Name"] || "",
+              size: row.Size || "",
+              colors: row.Colors || "",
+              sno: row.Sno || "",
+            };
+          }
         }
       });
 
@@ -199,12 +187,19 @@ export const useGRNGenerator = () => {
       allSkus.forEach((sku) => {
         const normalizedSku = sku.toString().trim().toUpperCase();
         const poItem = poMap[sku] || poMap[normalizedSku];
-        const receivedQty = receivedCounts[normalizedSku] || 0;
-        const orderedQty = poItem?.orderedQty || 0;
         
-        // Get QC fail information for this SKU
+        // Quantity from Put Away sheet
+        const putAwayQty = receivedCounts[normalizedSku] || 0;
+
+        // Quantity from QC Fail sheet
         const qcFailInfo = qcFailMap[normalizedSku];
         const totalFailQty = qcFailInfo?.totalFailQty || 0;
+
+        // The actual received quantity for this SKU is the sum of quantities from Put Away and QC Fail.
+        let receivedQty = putAwayQty + totalFailQty;
+
+        const orderedQty = poItem?.orderedQty || 0;
+        
         const passQty = Math.max(0, receivedQty - totalFailQty);
         
         // Determine QC status based on quantities
@@ -217,43 +212,43 @@ export const useGRNGenerator = () => {
           }
         }
 
-        // Debug log for each SKU
-        if (qcFailInfo) {
-          console.log(`SKU ${normalizedSku}:`, {
-            poItem: poItem ? "Found in PO" : "Not in PO",
-            receivedQty,
-            totalFailQty,
-            passQty,
-            qcStatus,
-            failDetails: qcFailInfo.fails
-          });
+        // --- Status Assignment Logic (Overall Fulfillment Status) ---
+        // This logic determines the primary status of the GRN item.
+        let status = "Complete"; // Default status
+        let remarks = "All items received as ordered"; // Default remarks
+
+        // 1. Not Ordered: If item is not in PO, but was received (via put away or QC fail)
+        if (!poItem) {
+            if (receivedQty > 0 || totalFailQty > 0) { // Check if it was received at all
+                status = "Not Ordered";
+                remarks = "Item received/QC Failed but not in purchase order";
+            }
+        }
+        // 2. Not Received: If item is in PO, but nothing was physically received (neither put away nor QC failed)
+        else if (receivedQty === 0) {
+            status = "Not Received";
+            remarks = "Item ordered but not received";
+        }
+        // 3. QC Failed Receipt: If item was ordered, received units, but ALL received units failed QC
+        else if (orderedQty > 0 && totalFailQty > 0 && passQty === 0) {
+            status = "QC Failed Receipt";
+            remarks = `All received units (${receivedQty}) failed QC.`;
+        }
+        // 4. Shortage: If ordered quantity is greater than total received quantity
+        else if (orderedQty > receivedQty) {
+            status = "Shortage";
+            remarks = `Short by ${orderedQty - receivedQty} units`;
+        }
+        // 5. Excess: If total received quantity is greater than ordered quantity
+        else if (receivedQty > orderedQty) {
+            status = "Excess";
+            remarks = `Excess of ${receivedQty - orderedQty} units`;
         }
 
-        const shortageQty = Math.max(0, orderedQty - receivedQty);
-        const excessQty = Math.max(0, receivedQty - orderedQty);
-        let notOrdered = 0;
-
-        let status = "Complete";
-        let remarks = "All items received as ordered";
-
-        // If item is only in QC fail data (not in PO or put away)
-        if (!poItem && !receivedCounts[normalizedSku] && qcFailInfo) {
-          status = "Not Ordered";
-          remarks = "QC Failed item not found in PO or Put Away data";
-        } else if (!poItem) {
-          status = "Not Ordered";
-          remarks = "Item received but not in purchase order";
-          notOrdered += 1;
-        } else if (receivedQty === 0) {
-          status = "Not Received";
-          remarks = "Item ordered but not received";
-        } else if (shortageQty > 0) {
-          status = "Shortage";
-          remarks = `Short by ${shortageQty} units`;
-        } else if (excessQty > 0) {
-          status = "Excess";
-          remarks = `Excess of ${excessQty} units`;
-        }
+        // --- Calculate shortageQty and excessQty for the GRN item ---
+        // These quantities reflect quantity discrepancies based on receivedQty vs orderedQty
+        let shortageQty = Math.max(0, orderedQty - receivedQty);
+        let excessQty = Math.max(0, receivedQty - orderedQty);
 
         // Add QC status and quantity details to remarks
         if (qcFailInfo) {
@@ -286,7 +281,6 @@ export const useGRNGenerator = () => {
           "Failed QC Qty": totalFailQty,
           "Shortage Qty": shortageQty,
           "Excess Qty": excessQty,
-          "Unit Price": poItem?.unitPrice || "",
           "QC Status": qcStatus,
           Status: status,
           "GRN Date": new Date().toLocaleDateString("en-GB"),
