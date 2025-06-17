@@ -72,14 +72,18 @@ class GRNExporter {
     // Calculate QC specific counts
     this.grnData.forEach(item => {
       if ((item["Ordered Qty"] || 0) > 0 && (item["Passed QC Qty"] || 0) > 0) {
-        stats.qcPassedAgainstPO += Math.min(item["Ordered Qty"], item["Passed QC Qty"]);
+        // QC passed against PO should be the minimum of ordered qty and passed QC qty
+        // but also consider that passed QC qty cannot exceed received qty
+        const maxPossiblePassed = Math.min(item["Ordered Qty"], item["Received Qty"]);
+        stats.qcPassedAgainstPO += Math.min(maxPossiblePassed, item["Passed QC Qty"]);
       }
       if ((item["Not Ordered Qty"] || 0) > 0 && (item["Passed QC Qty"] || 0) > 0) {
+        // For not ordered items, passed QC is the minimum of not ordered qty and passed QC qty
         stats.qcPassedNotOrdered += Math.min(item["Not Ordered Qty"], item["Passed QC Qty"]);
       }
     });
 
-    // Calculate percentages
+  // Calculate percentages
     stats.completionRate = stats.totalItems > 0 ? Math.round((stats.totalItems - stats.itemsWithIssues) / stats.totalItems * 100) : 0;
     stats.receiptAccuracy = stats.totalOrderedUnits > 0 ? Math.round(stats.totalReceivedUnits / stats.totalOrderedUnits * 100) : 0;
     stats.qcPassRate = stats.totalReceivedUnits > 0 ? Math.round((stats.totalQcPassedUnits / stats.totalReceivedUnits) * 100) : 0;
@@ -325,14 +329,14 @@ class GRNExporter {
     // Count items that have quantity issues but no QC issues
     return this.grnData.filter((item) => 
       (item["QC Status"] === "Passed" || item["QC Status"] === "Not Performed") && 
-      ["Shortage", "Excess", "Not Received", "Excess Receipt"].includes(item.Status)
+      ((item["Shortage Qty"] || 0) > 0 || (item["Excess Qty"] || 0) > 0 || (item["Not Ordered Qty"] || 0) > 0 || item.Status === "Not Received")
     ).length;
   }
 
   calculateWithBothIssues(summaryStats) {
     // Count items that have both QC issues and quantity issues
     return this.grnData.filter((item) => 
-      item["QC Status"] !== "Passed" && 
+        item["QC Status"] !== "Passed" && 
       item["QC Status"] !== "Not Performed" && 
       ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
     ).length;
@@ -394,13 +398,13 @@ class GRNExporter {
   buildHTMLContent(summaryStats) {
     return `
       <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Goods Received Note - ${this.documentNumber}</title>
-        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-        <style>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
           ${this.getHTMLStyles()}
         </style>
       </head>
@@ -422,112 +426,112 @@ class GRNExporter {
 
   getHTMLStyles() {
     return `
-      :root {
-        --primary: #2563eb;
-        --primary-light: #dbeafe;
-        --primary-dark: #1e40af;
-        --success: #059669;
-        --success-light: #d1fae5;
-        --warning: #d97706;
-        --warning-light: #fef3c7;
-        --danger: #dc2626;
-        --danger-light: #fee2e2;
-        --partial: #7c3aed;
-        --partial-light: #ede9fe;
-        --gray-50: #f8fafc;
-        --gray-100: #f1f5f9;
-        --gray-200: #e2e8f0;
-        --gray-300: #cbd5e1;
-        --gray-400: #94a3b8;
-        --gray-500: #64748b;
-        --gray-600: #475569;
-        --gray-700: #334155;
-        --gray-800: #1e293b;
-        --gray-900: #0f172a;
-      }
+    :root {
+      --primary: #2563eb;
+      --primary-light: #dbeafe;
+      --primary-dark: #1e40af;
+      --success: #059669;
+      --success-light: #d1fae5;
+      --warning: #d97706;
+      --warning-light: #fef3c7;
+      --danger: #dc2626;
+      --danger-light: #fee2e2;
+      --partial: #7c3aed;
+      --partial-light: #ede9fe;
+      --gray-50: #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-300: #cbd5e1;
+      --gray-400: #94a3b8;
+      --gray-500: #64748b;
+      --gray-600: #475569;
+      --gray-700: #334155;
+      --gray-800: #1e293b;
+      --gray-900: #0f172a;
+    }
 
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-      body {
+    body {
         font-family: 'Roboto', sans-serif;
-        line-height: 1.5;
-        color: var(--gray-800);
-        background: var(--gray-50);
-        margin: 0;
-        padding: 0;
-      }
+      line-height: 1.5;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      margin: 0;
+      padding: 0;
+    }
 
-      .page {
-        padding: 2rem;
-        max-width: 1600px;
-        margin: 0 auto;
-        background: white;
+    .page {
+      padding: 2rem;
+      max-width: 1600px;
+      margin: 0 auto;
+      background: white;
         box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-        border-radius: 8px;
-      }
+      border-radius: 8px;
+    }
 
-      .header {
-        display: grid;
-        grid-template-columns: 2fr 1fr;
-        gap: 2rem;
-        margin-bottom: 2rem;
-        padding-bottom: 1rem;
-        border-bottom: 2px solid var(--primary-light);
-        background: linear-gradient(to right, var(--primary-light), transparent);
-        padding: 1.5rem;
-        border-radius: 8px;
-      }
+    .header {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 2rem;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--primary-light);
+      background: linear-gradient(to right, var(--primary-light), transparent);
+      padding: 1.5rem;
+      border-radius: 8px;
+    }
 
-      .header h1 {
-        font-size: 28px;
-        font-weight: 700;
-        color: var(--primary-dark);
-        margin-bottom: 0.5rem;
-      }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin-bottom: 0.5rem;
+    }
 
-      .header .doc-no {
-        font-size: 16px;
-        color: var(--gray-600);
-        font-weight: 500;
-      }
+    .header .doc-no {
+      font-size: 16px;
+      color: var(--gray-600);
+      font-weight: 500;
+    }
 
-      .header .doc-date {
-        font-size: 14px;
-        color: var(--gray-500);
-        margin-top: 0.25rem;
-      }
+    .header .doc-date {
+      font-size: 14px;
+      color: var(--gray-500);
+      margin-top: 0.25rem;
+    }
 
-      .status-badge {
-        display: inline-block;
-        padding: 0.5rem 1rem;
-        border-radius: 4px;
-        font-size: 14px;
-        font-weight: 600;
-        text-transform: uppercase;
-        margin-top: 0.5rem;
-      }
+    .status-badge {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-top: 0.5rem;
+    }
 
-      .status-complete { 
-        background: var(--success-light); 
-        color: var(--success);
-        border: 1px solid var(--success);
-      }
-      
-      .status-partial { 
-        background: var(--partial-light); 
-        color: var(--partial);
-        border: 1px solid var(--partial);
-      }
-      
-      .status-discrepancy { 
-        background: var(--danger-light); 
-        color: var(--danger);
-        border: 1px solid var(--danger);
-      }
+    .status-complete { 
+      background: var(--success-light); 
+      color: var(--success);
+      border: 1px solid var(--success);
+    }
+    
+    .status-partial { 
+      background: var(--partial-light); 
+      color: var(--partial);
+      border: 1px solid var(--partial);
+    }
+    
+    .status-discrepancy { 
+      background: var(--danger-light); 
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
 
       .status-qc-failed-receipt {
         background: var(--danger-light);
@@ -577,151 +581,151 @@ class GRNExporter {
         border: 1px solid var(--gray-300);
       }
 
-      .main-grid {
-        display: grid;
-        grid-template-columns: 1fr 2fr;
-        gap: 2rem;
-        margin-bottom: 2rem;
-      }
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
 
-      .info-sections {
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-      }
+    .info-sections {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
 
-      .info-section {
-        background: var(--gray-50);
-        padding: 1.25rem;
-        border-radius: 8px;
-        border: 1px solid var(--gray-200);
-        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-      }
+    .info-section {
+      background: var(--gray-50);
+      padding: 1.25rem;
+      border-radius: 8px;
+      border: 1px solid var(--gray-200);
+      box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    }
 
-      .info-section h3 {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--primary-dark);
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid var(--primary-light);
-      }
+    .info-section h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--primary-dark);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--primary-light);
+    }
 
-      .info-row {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 0.75rem;
-        font-size: 14px;
-      }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+      font-size: 14px;
+    }
 
-      .info-label {
-        color: var(--gray-600);
-        font-weight: 500;
-      }
+    .info-label {
+      color: var(--gray-600);
+      font-weight: 500;
+    }
 
-      .info-value {
-        color: var(--gray-900);
-        font-weight: 600;
-      }
+    .info-value {
+      color: var(--gray-900);
+      font-weight: 600;
+    }
 
-      .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 0.75rem;
-      }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.75rem;
+    }
 
-      .summary-card {
-        background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        border: 1px solid var(--gray-200);
-        text-align: center;
-        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.03);
-        transition: all 0.2s ease;
-        min-height: 120px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-      }
+    .summary-card {
+      background: white;
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--gray-200);
+      text-align: center;
+      box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+      transition: all 0.2s ease;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
 
-      .summary-card:hover {
-        transform: translateY(-2px);
+    .summary-card:hover {
+      transform: translateY(-2px);
         box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08);
-      }
+    }
 
-      .summary-value {
-        font-size: 24px;
-        font-weight: 700;
-        margin-bottom: 0.25rem;
-        color: var(--primary-dark);
-      }
+    .summary-value {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+      color: var(--primary-dark);
+    }
 
-      .summary-label {
-        font-size: 14px;
-        color: var(--gray-600);
-        margin-bottom: 0.1rem;
-      }
+    .summary-label {
+      font-size: 14px;
+      color: var(--gray-600);
+      margin-bottom: 0.1rem;
+    }
 
-      .summary-subtext {
-        font-size: 12px;
-        color: var(--gray-500);
-        line-height: 1.4;
-      }
+    .summary-subtext {
+      font-size: 12px;
+      color: var(--gray-500);
+      line-height: 1.4;
+    }
 
-      .summary-subtext strong {
-        color: var(--gray-700);
-      }
+    .summary-subtext strong {
+      color: var(--gray-700);
+    }
 
-      .table-container {
-        margin: 2rem 0;
-        border: 1px solid var(--gray-200);
-        border-radius: 8px;
-        overflow: hidden;
+    .table-container {
+      margin: 2rem 0;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      overflow: hidden;
         box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-      }
+    }
 
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-      }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
 
-      th {
-        background: var(--primary-light);
-        color: var(--primary-dark);
-        font-weight: 600;
-        text-align: left;
-        padding: 1rem;
-        border-bottom: 2px solid var(--primary);
-        white-space: nowrap;
-      }
+    th {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      font-weight: 600;
+      text-align: left;
+      padding: 1rem;
+      border-bottom: 2px solid var(--primary);
+      white-space: nowrap;
+    }
 
-      td {
-        padding: 0.75rem 1rem;
-        border-bottom: 1px solid var(--gray-200);
-        color: var(--gray-700);
-      }
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--gray-200);
+      color: var(--gray-700);
+    }
 
-      tr:last-child td {
-        border-bottom: none;
-      }
+    tr:last-child td {
+      border-bottom: none;
+    }
 
-      tr:hover td {
-        background: var(--gray-50);
-      }
+    tr:hover td {
+      background: var(--gray-50);
+    }
 
-      .sku-cell {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        font-size: 12px;
-        color: var(--gray-800);
-      }
+    .sku-cell {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: var(--gray-800);
+    }
 
-      .qty-cell {
-        text-align: right;
-        font-weight: 600;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      }
+    .qty-cell {
+      text-align: right;
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
 
       .qc-failed {
         color: var(--danger);
@@ -733,47 +737,47 @@ class GRNExporter {
 
       .excess {
         color: var(--success);
-      }
+    }
 
-      .footer {
-        margin-top: 2rem;
-        text-align: center;
-        padding-top: 1rem;
-        border-top: 1px solid var(--primary-light);
-      }
+    .footer {
+      margin-top: 2rem;
+      text-align: center;
+      padding-top: 1rem;
+      border-top: 1px solid var(--primary-light);
+    }
 
-      .footer-text {
-        font-size: 12px;
-        color: var(--gray-500);
-      }
+    .footer-text {
+      font-size: 12px;
+      color: var(--gray-500);
+    }
 
       .export-actions {
-        display: flex;
-        gap: 1rem;
+      display: flex;
+      gap: 1rem;
         justify-content: flex-end;
         margin: 1.5rem 0;
         padding: 0;
-      }
+    }
 
       .export-btn {
         display: flex;
-        align-items: center;
-        gap: 0.5rem;
+      align-items: center;
+      gap: 0.5rem;
         padding: 0.75rem 1.25rem;
         border: none;
-        border-radius: 6px;
-        font-size: 14px;
+      border-radius: 6px;
+      font-size: 14px;
         font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
+      cursor: pointer;
+      transition: all 0.2s ease;
         text-decoration: none;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      }
+    }
 
       .csv-btn {
-        background: var(--primary);
-        color: white;
-      }
+      background: var(--primary);
+      color: white;
+    }
 
       .csv-btn:hover {
         background: #1d4ed8;
@@ -798,69 +802,69 @@ class GRNExporter {
 
       .btn-text {
         font-weight: 500;
+    }
+
+    @media print {
+      body {
+        background: white;
       }
 
-      @media print {
-        body {
-          background: white;
-        }
-
-        .page {
-          padding: 0;
-          max-width: none;
-          box-shadow: none;
-        }
+      .page {
+        padding: 0;
+        max-width: none;
+        box-shadow: none;
+      }
 
         .export-actions {
-          display: none;
-        }
-
-        .footer {
-          border-top: none;
-        }
-
-        .summary-card:hover,
-        tr:hover td {
-          transform: none;
-          box-shadow: none;
-        }
+        display: none;
       }
 
-      @media (max-width: 1200px) {
-        .main-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .summary-grid {
-          grid-template-columns: repeat(2, 1fr);
-        }
+      .footer {
+        border-top: none;
       }
 
-      @media (max-width: 768px) {
-        .page {
-          padding: 1rem;
-        }
-
-        .header {
-          grid-template-columns: 1fr;
-          text-align: center;
-        }
-
-        .summary-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .table-container {
-          margin: 1rem -1rem;
-          border-radius: 0;
-          border-left: none;
-          border-right: none;
-        }
-
-        th, td {
-          padding: 0.75rem;
-        }
+      .summary-card:hover,
+      tr:hover td {
+        transform: none;
+        box-shadow: none;
       }
+    }
+
+    @media (max-width: 1200px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .page {
+        padding: 1rem;
+      }
+
+      .header {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .table-container {
+        margin: 1rem -1rem;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+      }
+
+      th, td {
+        padding: 0.75rem;
+      }
+    }
     `;
   }
 
@@ -869,16 +873,16 @@ class GRNExporter {
     const statusText = this.getStatusText(summaryStats.overallStatus);
     
     return `
-      <div class="header">
-        <div class="header-main">
-          <h1>Goods Received Note</h1>
+    <div class="header">
+      <div class="header-main">
+        <h1>Goods Received Note</h1>
           <div class="doc-no">${this.documentNumber}</div>
           <div class="doc-date">Generated on ${this.getCurrentDateTime()}</div>
-        </div>
-        <div class="header-side">
-          <div class="status-badge ${statusClass}">${statusText}</div>
-        </div>
       </div>
+      <div class="header-side">
+          <div class="status-badge ${statusClass}">${statusText}</div>
+      </div>
+    </div>
     `;
   }
 
@@ -910,115 +914,113 @@ class GRNExporter {
     `;
 
     return `
-      <div class="main-grid">
-        <div class="info-sections">
-          <div class="info-section">
-            <h3>Order Information</h3>
-            <div class="info-row">
-              <span class="info-label">Purchase Order No:</span>
+    <div class="main-grid">
+      <div class="info-sections">
+        <div class="info-section">
+          <h3>Order Information</h3>
+          <div class="info-row">
+            <span class="info-label">Purchase Order No:</span>
               <span class="info-value">${this.grnHeaderInfo.poNumber}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Vendor Name:</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Vendor Name:</span>
               <span class="info-value">${this.grnHeaderInfo.brandName}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Replenishment No:</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Replenishment No:</span>
               <span class="info-value">${this.grnHeaderInfo.replenishmentNumber}</span>
-            </div>
           </div>
-
-          <div class="info-section">
-            <h3>Receipt Information</h3>
-            <div class="info-row">
-              <span class="info-label">Inward Date:</span>
-              <span class="info-value">${this.grnHeaderInfo.inwardDate}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Receiving Warehouse:</span>
-              <span class="info-value">${this.grnHeaderInfo.warehouseNo}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Receipt Accuracy:</span>
-              <span class="info-value">${summaryStats.receiptAccuracy}%</span>
-            </div>
-          </div>
-
-          ${qcSection}
         </div>
 
-        <div class="summary-grid">
-          <div class="summary-card">
+        <div class="info-section">
+          <h3>Receipt Information</h3>
+          <div class="info-row">
+            <span class="info-label">Inward Date:</span>
+              <span class="info-value">${this.grnHeaderInfo.inwardDate}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Receiving Warehouse:</span>
+              <span class="info-value">${this.grnHeaderInfo.warehouseNo}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Receipt Accuracy:</span>
+              <span class="info-value">${summaryStats.receiptAccuracy}%</span>
+          </div>
+        </div>
+
+          ${qcSection}
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card">
             <div class="summary-value">${summaryStats.totalItems}</div>
-            <div class="summary-label">Total Items</div>
-            <div class="summary-subtext">
+          <div class="summary-label">Total Items</div>
+          <div class="summary-subtext">
               <strong>${this.calculatePercentage(summaryStats.totalItems - summaryStats.itemsWithIssues, summaryStats.totalItems)}%</strong> Complete<br>
               <strong>${this.calculatePercentage(summaryStats.itemsWithIssues, summaryStats.totalItems)}%</strong> With Issues
-            </div>
           </div>
-          <div class="summary-card">
+        </div>
+        <div class="summary-card">
             <div class="summary-value">${summaryStats.totalOrderedUnits}</div>
-            <div class="summary-label">Total Ordered Units</div>
-            <div class="summary-subtext">
+          <div class="summary-label">Total Ordered Units</div>
+          <div class="summary-subtext">
               <strong>${summaryStats.totalReceivedUnits}</strong> Received<br>
               <strong>${summaryStats.receiptAccuracy}%</strong> Accuracy
-            </div>
           </div>
-          <div class="summary-card">
+        </div>
+        <div class="summary-card">
             <div class="summary-value">${summaryStats.totalReceivedUnits}</div>
             <div class="summary-label">Received Units</div>
             <div class="summary-subtext">
               ${this.grnHeaderInfo.qcPerformed ? `
                 <strong>${summaryStats.totalQcPassedUnits}</strong> QC Pass<br>
-                <strong>${summaryStats.totalQcFailedUnits}</strong> QC Fail<br>
+                <strong>${summaryStats.totalQcFailedUnits}</strong> QC Fail
               ` : ''}
-              <strong>${summaryStats.totalNotOrderedUnits}</strong> Not Ordered
             </div>
           </div>
           ${this.grnHeaderInfo.qcPerformed ? `
-            <div class="summary-card">
+        <div class="summary-card">
               <div class="summary-value">${summaryStats.totalQcPassedUnits}</div>
               <div class="summary-label">QC Passed Units</div>
-              <div class="summary-subtext">
+          <div class="summary-subtext">
                 <strong>${summaryStats.qcPassedAgainstPO}</strong> Against PO<br>
-                <strong>${summaryStats.qcPassedNotOrdered}</strong> Not Ordered
-              </div>
-            </div>
-            <div class="summary-card">
+                <strong>${summaryStats.qcPassedNotOrdered}</strong> Not Ordered<br>
+                <strong>${summaryStats.qcPassRate}%</strong> Pass Rate
+          </div>
+        </div>
+        <div class="summary-card">
               <div class="summary-value">${summaryStats.totalQcFailedUnits}</div>
               <div class="summary-label">QC Failed Units</div>
-              <div class="summary-subtext">
-                <strong>${summaryStats.totalQcFailedUnits}</strong> Units<br>
-                <strong>${summaryStats.qcPassRate}%</strong> Pass Rate
-              </div>
-            </div>
+          <div class="summary-subtext">
+                <strong>${summaryStats.totalQcFailedUnits}</strong> Units
+          </div>
+        </div>
           ` : ''}
-          <div class="summary-card">
+        <div class="summary-card">
             <div class="summary-value">${summaryStats.totalShortageUnits}</div>
             <div class="summary-label">Total Shortage Units</div>
-            <div class="summary-subtext">
+          <div class="summary-subtext">
               Across <strong>${this.countByStatus("Shortage")}</strong> Items<br>
-              Avg. <strong>${this.calculatePercentage(summaryStats.totalShortageUnits, this.countByStatus("Shortage"))}</strong> Units/Item
-            </div>
+              Avg. <strong>${this.countByStatus("Shortage") > 0 ? Math.round(summaryStats.totalShortageUnits / this.countByStatus("Shortage")) : 0}</strong> Units/Item
           </div>
-          <div class="summary-card">
+        </div>
+        <div class="summary-card">
             <div class="summary-value">${summaryStats.totalExcessUnits}</div>
             <div class="summary-label">Total Excess Units</div>
-            <div class="summary-subtext">
+          <div class="summary-subtext">
               Across <strong>${this.countByStatus("Excess")}</strong> Items<br>
-              Avg. <strong>${this.calculatePercentage(summaryStats.totalExcessUnits, this.countByStatus("Excess"))}</strong> Units/Item
-            </div>
+              Avg. <strong>${this.countByStatus("Excess") > 0 ? Math.round(summaryStats.totalExcessUnits / this.countByStatus("Excess")) : 0}</strong> Units/Item
           </div>
-          <div class="summary-card">
+        </div>
+        <div class="summary-card">
             <div class="summary-value">${summaryStats.totalNotOrderedUnits}</div>
             <div class="summary-label">Not Ordered Units</div>
-            <div class="summary-subtext">
-              <strong>${this.countByStatus("Excess Receipt")}</strong> Units<br>
+          <div class="summary-subtext">
               Across <strong>${this.countByStatus("Excess Receipt")}</strong> Items
-            </div>
           </div>
         </div>
       </div>
+    </div>
     `;
   }
 
@@ -1039,31 +1041,31 @@ class GRNExporter {
 
   buildHTMLTable() {
     return `
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>S.No</th>
-              <th>Brand SKU</th>
-              <th>KNOT SKU</th>
-              <th>Size</th>
-              <th>Color</th>
-              <th>Ordered</th>
-              <th>Received</th>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>S.No</th>
+            <th>Brand SKU</th>
+            <th>KNOT SKU</th>
+            <th>Size</th>
+            <th>Color</th>
+            <th>Ordered</th>
+            <th>Received</th>
               ${this.grnHeaderInfo.qcPerformed ? `
-                <th>Passed QC</th>
-                <th>Failed QC</th>
+            <th>Passed QC</th>
+            <th>Failed QC</th>
               ` : ''}
-              <th>Shortage</th>
-              <th>Excess</th>
+            <th>Shortage</th>
+            <th>Excess</th>
               ${this.grnHeaderInfo.qcPerformed ? `
-                <th>QC Status</th>
+            <th>QC Status</th>
               ` : ''}
-              <th>Status</th>
-              <th>Remarks</th>
-            </tr>
-          </thead>
-          <tbody>
+            <th>Status</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
             ${this.grnData.map((item, index) => this.buildTableRow(item, index + 1)).join('')}
           </tbody>
         </table>
@@ -1096,16 +1098,16 @@ class GRNExporter {
           <td>
             <span class="status-badge ${qcStatusClass}">
               ${qcStatusText}
-            </span>
-          </td>
+                </span>
+              </td>
         ` : ''}
-        <td>
+              <td>
           <span class="status-badge ${statusClass}">
             ${statusText}
-          </span>
-        </td>
+                </span>
+              </td>
         <td style="font-size: 12px; max-width: 250px;">${this.generateRemarks(item)}</td>
-      </tr>
+            </tr>
     `;
   }
 
@@ -1219,7 +1221,7 @@ class GRNExporter {
 
       function generateCSV() {
         const today = new Date();
-        
+
         // Calculate summary statistics manually
         const summaryStats = {
           totalOrderedUnits: grnData.reduce((sum, item) => sum + (item["Ordered Qty"] || 0), 0),
@@ -1400,22 +1402,22 @@ class GRNExporter {
       function downloadCsvFromData() {
         try {
           const csvContent = generateCSV();
-          
-          // Create and trigger download
+
+        // Create and trigger download
           const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
+        const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
           a.download = documentNumber + '.csv';
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        } catch (error) {
-          console.error("Error downloading CSV:", error);
-          alert("Error downloading CSV. Please try again.");
-        }
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Error downloading CSV:", error);
+        alert("Error downloading CSV. Please try again.");
       }
+    }
 
       function downloadPdfFromData() {
         try {
@@ -1654,7 +1656,7 @@ class GRNExporter {
         ${this.buildPDFSummary(summaryStats)}
         ${this.buildPDFTable()}
         ${this.buildPDFFooter()}
-      </body>
+</body>
       </html>
     `;
   }
@@ -2075,7 +2077,7 @@ function downloadHTML(grnData, grnHeaderInfo) {
 
         // Create and trigger download
   const blob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `${exporter.documentNumber}.html`;

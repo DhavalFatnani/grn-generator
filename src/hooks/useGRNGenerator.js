@@ -138,7 +138,9 @@ export const useGRNGenerator = () => {
       }
 
       if (itemObject) {
-        itemObject.receivedQty = (itemObject.receivedQty || 0) + 1; // Assuming 1 unit per row in put away for now
+        // Each line in put away represents 1 unit, just like QC Fail
+        const putAwayQty = parseInt(getColumnValue(row, "quantity", ["Quantity", "Put Away Quantity", "1"])) || 1;
+        itemObject.receivedQty = (itemObject.receivedQty || 0) + putAwayQty;
       }
       // If item in Put Away not found in PO, it's currently skipped. Could add validation.
     });
@@ -299,9 +301,9 @@ export const useGRNGenerator = () => {
           "Size": item.size || "",
           "Color": item.colors || "",
           "Ordered Qty": item.orderedQty,
-          "Received Qty": item.receivedQty + item.totalFailQty, // Total received including QC fails
-          "Passed QC Qty": Math.max(0, item.receivedQty - item.totalFailQty), // Received minus QC fails
-          "Failed QC Qty": item.totalFailQty,
+          "Received Qty": item.receivedQty + item.totalFailQty, // Total received = QC Pass + QC Fail
+          "Passed QC Qty": item.receivedQty, // Put away units are QC Pass
+          "Failed QC Qty": item.totalFailQty, // QC Fail units
           "Shortage Qty": Math.max(0, item.orderedQty - (item.receivedQty + item.totalFailQty)),
           "Excess Qty": Math.max(0, (item.receivedQty + item.totalFailQty) - item.orderedQty),
           "QC Status": (item.receivedQty + item.totalFailQty) === 0 ? "Not Performed" : 

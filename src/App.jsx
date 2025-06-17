@@ -197,7 +197,7 @@ const GRNGenerator = () => {
   // Calculate items that only have quantity issues (no QC issues)
   summaryStats.items.onlyQuantityIssues = grnData.filter((item) => 
     (item["QC Status"] === "Passed" || item["QC Status"] === "Not Performed") && 
-    ["Shortage", "Excess", "Not Received", "Excess Receipt"].includes(item.Status)
+    ((item["Shortage Qty"] || 0) > 0 || (item["Excess Qty"] || 0) > 0 || (item["Not Ordered Qty"] || 0) > 0 || item.Status === "Not Received")
   ).length;
 
   // Calculate total items with any issues
