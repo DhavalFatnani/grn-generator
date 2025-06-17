@@ -1409,26 +1409,13 @@ class GRNExporter {
           // Create a new window for printing
           const printWindow = window.open('', '_blank');
           
+          const exporter = new GRNExporter(grnData, grnHeaderInfo);
           const today = new Date();
           const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
           const grnDocNo = "GRN-KNOT-" + dateStr + "-" + grnHeaderInfo.brandName.replace(/\s+/g, "") + "-" + grnHeaderInfo.replenishmentNumber;
 
-          // Calculate summary statistics manually
-          const summaryStats = {
-            totalOrderedUnits: grnData.reduce((sum, item) => sum + (item["Ordered Qty"] || 0), 0),
-            totalReceivedUnits: grnData.reduce((sum, item) => sum + (item["Received Qty"] || 0), 0),
-            totalShortageUnits: grnData.reduce((sum, item) => sum + (item["Shortage Qty"] || 0), 0),
-            totalExcessUnits: grnData.reduce((sum, item) => sum + (item["Excess Qty"] || 0), 0),
-            totalNotOrderedUnits: grnData.reduce((sum, item) => sum + (item["Not Ordered Qty"] || 0), 0),
-            totalQcPassedUnits: grnData.reduce((sum, item) => sum + (item["Passed QC Qty"] || 0), 0),
-            totalQcFailedUnits: grnData.reduce((sum, item) => sum + (item["Failed QC Qty"] || 0), 0)
-          };
-          
-          summaryStats.receiptAccuracy = summaryStats.totalOrderedUnits > 0 ? 
-            Math.round(((summaryStats.totalOrderedUnits - summaryStats.totalShortageUnits) / summaryStats.totalOrderedUnits) * 100) : 0;
-          
-          summaryStats.qcPassRate = (summaryStats.totalQcPassedUnits + summaryStats.totalQcFailedUnits) > 0 ? 
-            Math.round((summaryStats.totalQcPassedUnits / (summaryStats.totalQcPassedUnits + summaryStats.totalQcFailedUnits)) * 100) : 0;
+          // Calculate summary statistics
+          const summaryStats = exporter.calculateSummaryStats();
 
           // Build QC-related summary cards
           const qcSummaryCards = grnHeaderInfo.qcPerformed ? 
@@ -1446,14 +1433,6 @@ class GRNExporter {
               '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.qcPassRate + '%</div>' +
               '<div style="font-size: 10px; color: #666; font-weight: 500;">QC Pass Rate</div>' +
             '</div>' : '';
-
-          // Build QC-related table headers
-          const qcTableHeaders = grnHeaderInfo.qcPerformed ? 
-            '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Passed QC</th>' +
-            '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Failed QC</th>' : '';
-
-          const qcStatusHeader = grnHeaderInfo.qcPerformed ? 
-            '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">QC Status</th>' : '';
 
           // Build table rows
           const tableRows = grnData.map((row, index) => {
@@ -2098,19 +2077,9 @@ function downloadCSV(grnData, grnHeaderInfo) {
 
 function downloadPDF(grnData, grnHeaderInfo) {
   try {
-    // Create a temporary div to render the content
-    const tempDiv = document.createElement('div');
-    tempDiv.style.position = 'absolute';
-    tempDiv.style.left = '-9999px';
-    tempDiv.style.top = '0';
-    tempDiv.style.width = '800px';
-    tempDiv.style.backgroundColor = 'white';
-    tempDiv.style.padding = '20px';
-    tempDiv.style.fontFamily = 'Arial, sans-serif';
-    tempDiv.style.fontSize = '12px';
-    tempDiv.style.lineHeight = '1.4';
-    document.body.appendChild(tempDiv);
-
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+    
     const exporter = new GRNExporter(grnData, grnHeaderInfo);
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
@@ -2118,8 +2087,6 @@ function downloadPDF(grnData, grnHeaderInfo) {
 
     // Calculate summary statistics
     const summaryStats = exporter.calculateSummaryStats();
-    const qcPassRate = summaryStats.qcPassRate;
-    const receiptAccuracy = summaryStats.receiptAccuracy;
 
     // Build QC-related summary cards
     const qcSummaryCards = grnHeaderInfo.qcPerformed ? 
@@ -2134,17 +2101,9 @@ function downloadPDF(grnData, grnHeaderInfo) {
 
     const qcPassRateCard = grnHeaderInfo.qcPerformed ? 
       '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
-        '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + qcPassRate + '%</div>' +
+        '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.qcPassRate + '%</div>' +
         '<div style="font-size: 10px; color: #666; font-weight: 500;">QC Pass Rate</div>' +
       '</div>' : '';
-
-    // Build QC-related table headers
-    const qcTableHeaders = grnHeaderInfo.qcPerformed ? 
-      '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Passed QC</th>' +
-      '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Failed QC</th>' : '';
-
-    const qcStatusHeader = grnHeaderInfo.qcPerformed ? 
-      '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">QC Status</th>' : '';
 
     // Build table rows
     const tableRows = grnData.map((row, index) => {
@@ -2190,130 +2149,125 @@ function downloadPDF(grnData, grnHeaderInfo) {
       '</tr>';
     }).join('');
 
-    // Create HTML content for PDF
-    tempDiv.innerHTML = 
-      '<div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px;">' +
-        '<h1 style="margin: 0; color: #2563eb; font-size: 24px; font-weight: bold;">Goods Received Note</h1>' +
-        '<div style="font-size: 14px; color: #666; margin-top: 5px; font-weight: 600;">' + grnDocNo + '</div>' +
-        '<div style="font-size: 12px; color: #888; margin-top: 3px;">Generated on ' + today.toLocaleDateString("en-GB") + ' at ' + today.toLocaleTimeString() + '</div>' +
-      '</div>' +
+    // Create HTML content for printing
+    const printContent = 
+      '<!DOCTYPE html>' +
+      '<html>' +
+      '<head>' +
+        '<title>Goods Received Note - ' + grnDocNo + '</title>' +
+        '<style>' +
+          '@media print { body { margin: 0; padding: 20px; } }' +
+          'body { font-family: Arial, sans-serif; font-size: 12px; line-height: 1.4; }' +
+          'table { width: 100%; border-collapse: collapse; font-size: 10px; }' +
+          'th, td { border: 1px solid #ddd; padding: 6px 4px; text-align: center; }' +
+          'th { background-color: #f2f2f2; font-weight: bold; }' +
+          '.header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; }' +
+          '.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }' +
+          '.info-card { background: #f8f9fa; padding: 12px; border-radius: 4px; border: 1px solid #e9ecef; }' +
+          '.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }' +
+          '.stat-card { text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6; }' +
+          '.footer { margin-top: 20px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 10px; }' +
+        '</style>' +
+      '</head>' +
+      '<body>' +
+        '<div class="header">' +
+          '<h1 style="margin: 0; color: #2563eb; font-size: 24px; font-weight: bold;">Goods Received Note</h1>' +
+          '<div style="font-size: 14px; color: #666; margin-top: 5px; font-weight: 600;">' + grnDocNo + '</div>' +
+          '<div style="font-size: 12px; color: #888; margin-top: 3px;">Generated on ' + today.toLocaleDateString("en-GB") + ' at ' + today.toLocaleTimeString() + '</div>' +
+        '</div>' +
 
-      '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">' +
-        '<div style="background: #f8f9fa; padding: 12px; border-radius: 4px; border: 1px solid #e9ecef;">' +
-          '<h3 style="margin: 0 0 8px 0; color: #2563eb; font-size: 14px; font-weight: bold;">Order Information</h3>' +
-          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
-            '<span>PO Number:</span><span>' + grnHeaderInfo.poNumber + '</span>' +
+        '<div class="info-grid">' +
+          '<div class="info-card">' +
+            '<h3 style="margin: 0 0 8px 0; color: #2563eb; font-size: 14px; font-weight: bold;">Order Information</h3>' +
+            '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+              '<span>PO Number:</span><span>' + grnHeaderInfo.poNumber + '</span>' +
+            '</div>' +
+            '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+              '<span>Vendor:</span><span>' + grnHeaderInfo.brandName + '</span>' +
+            '</div>' +
+            '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+              '<span>Replenishment:</span><span>' + grnHeaderInfo.replenishmentNumber + '</span>' +
+            '</div>' +
           '</div>' +
-          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
-            '<span>Vendor:</span><span>' + grnHeaderInfo.brandName + '</span>' +
-          '</div>' +
-          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
-            '<span>Replenishment:</span><span>' + grnHeaderInfo.replenishmentNumber + '</span>' +
-          '</div>' +
-        '</div>' +
-        '<div style="background: #f8f9fa; padding: 12px; border-radius: 4px; border: 1px solid #e9ecef;">' +
-          '<h3 style="margin: 0 0 8px 0; color: #2563eb; font-size: 14px; font-weight: bold;">Receipt Information</h3>' +
-          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
-            '<span>Inward Date:</span><span>' + grnHeaderInfo.inwardDate + '</span>' +
-          '</div>' +
-          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
-            '<span>Warehouse:</span><span>' + grnHeaderInfo.warehouseNo + '</span>' +
-          '</div>' +
-          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
-            '<span>Receipt Accuracy:</span><span>' + receiptAccuracy + '%</span>' +
+          '<div class="info-card">' +
+            '<h3 style="margin: 0 0 8px 0; color: #2563eb; font-size: 14px; font-weight: bold;">Receipt Information</h3>' +
+            '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+              '<span>Inward Date:</span><span>' + grnHeaderInfo.inwardDate + '</span>' +
+            '</div>' +
+            '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+              '<span>Warehouse:</span><span>' + grnHeaderInfo.warehouseNo + '</span>' +
+            '</div>' +
+            '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+              '<span>Receipt Accuracy:</span><span>' + summaryStats.receiptAccuracy + '%</span>' +
+            '</div>' +
           '</div>' +
         '</div>' +
-      '</div>' +
 
-      '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px;">' +
-        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
-          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalOrderedUnits + '</div>' +
-          '<div style="font-size: 10px; color: #666; font-weight: 500;">Ordered Units</div>' +
+        '<div class="stats-grid">' +
+          '<div class="stat-card">' +
+            '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalOrderedUnits + '</div>' +
+            '<div style="font-size: 10px; color: #666; font-weight: 500;">Ordered Units</div>' +
+          '</div>' +
+          '<div class="stat-card">' +
+            '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalReceivedUnits + '</div>' +
+            '<div style="font-size: 10px; color: #666; font-weight: 500;">Received Units</div>' +
+          '</div>' +
+          qcSummaryCards +
+          '<div class="stat-card">' +
+            '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalShortageUnits + '</div>' +
+            '<div style="font-size: 10px; color: #666; font-weight: 500;">Shortage</div>' +
+          '</div>' +
+          '<div class="stat-card">' +
+            '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalExcessUnits + '</div>' +
+            '<div style="font-size: 10px; color: #666; font-weight: 500;">Excess</div>' +
+          '</div>' +
+          '<div class="stat-card">' +
+            '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalNotOrderedUnits + '</div>' +
+            '<div style="font-size: 10px; color: #666; font-weight: 500;">Not Ordered</div>' +
+          '</div>' +
+          qcPassRateCard +
         '</div>' +
-        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
-          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalReceivedUnits + '</div>' +
-          '<div style="font-size: 10px; color: #666; font-weight: 500;">Received Units</div>' +
+
+        '<div style="margin-top: 15px; overflow-x: auto;">' +
+          '<table>' +
+            '<thead>' +
+              '<tr>' +
+                '<th>S.No</th>' +
+                '<th>Brand SKU</th>' +
+                '<th>KNOT SKU</th>' +
+                '<th>Size</th>' +
+                '<th>Color</th>' +
+                '<th>Ordered</th>' +
+                '<th>Received</th>' +
+                (grnHeaderInfo.qcPerformed ? '<th>Passed QC</th><th>Failed QC</th>' : '') +
+                '<th>Shortage</th>' +
+                '<th>Excess</th>' +
+                (grnHeaderInfo.qcPerformed ? '<th>QC Status</th>' : '') +
+                '<th>Status</th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody>' +
+              tableRows +
+            '</tbody>' +
+          '</table>' +
         '</div>' +
-        qcSummaryCards +
-        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
-          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalShortageUnits + '</div>' +
-          '<div style="font-size: 10px; color: #666; font-weight: 500;">Shortage</div>' +
+
+        '<div class="footer">' +
+          '<strong>KNOT Inventory Management System</strong><br>' +
+          'This is a computer-generated document. For queries, contact the warehouse team.' +
         '</div>' +
-        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
-          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalExcessUnits + '</div>' +
-          '<div style="font-size: 10px; color: #666; font-weight: 500;">Excess</div>' +
-        '</div>' +
-        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
-          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalNotOrderedUnits + '</div>' +
-          '<div style="font-size: 10px; color: #666; font-weight: 500;">Not Ordered</div>' +
-        '</div>' +
-        qcPassRateCard +
-      '</div>' +
+      '</body>' +
+      '</html>';
 
-      '<div style="margin-top: 15px; overflow-x: auto;">' +
-        '<table style="width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed;">' +
-          '<thead>' +
-            '<tr style="background-color: #f2f2f2;">' +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">S.No</th>' +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Brand SKU</th>' +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">KNOT SKU</th>' +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Size</th>' +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Color</th>' +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Ordered</th>' +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Received</th>' +
-              qcTableHeaders +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Shortage</th>' +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Excess</th>' +
-              qcStatusHeader +
-              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Status</th>' +
-            '</tr>' +
-          '</thead>' +
-          '<tbody>' +
-            tableRows +
-          '</tbody>' +
-        '</table>' +
-      '</div>' +
-
-      '<div style="margin-top: 20px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 10px;">' +
-        '<strong>KNOT Inventory Management System</strong><br>' +
-        'This is a computer-generated document. For queries, contact the warehouse team.' +
-      '</div>';
-
-    // Use html2canvas to convert the div to canvas
-    import('html2canvas').then(({ default: html2canvas }) => {
-      html2canvas(tempDiv, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff'
-      }).then(canvas => {
-        // Convert canvas to PDF using jsPDF
-        import('jspdf').then(({ default: jsPDF }) => {
-          const imgData = canvas.toDataURL('image/png');
-          const pdf = new jsPDF('p', 'mm', 'a4');
-          const imgWidth = 210; // A4 width in mm
-          const pageHeight = 295; // A4 height in mm
-          const imgHeight = (canvas.height * imgWidth) / canvas.width;
-          let heightLeft = imgHeight;
-
-          let position = 0;
-
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
-
-          while (heightLeft >= 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-          }
-
-          pdf.save(grnDocNo + '.pdf');
-          document.body.removeChild(tempDiv);
-        });
-      });
-    });
-
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    
+    // Wait for content to load then print
+    printWindow.onload = function() {
+      printWindow.print();
+      printWindow.close();
+    };
+    
   } catch (error) {
     console.error("Error downloading PDF:", error);
     alert("Error downloading PDF. Please try again.");
