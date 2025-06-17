@@ -313,44 +313,29 @@ class GRNExporter {
   }
 
   calculateOnlyQCFailed(summaryStats) {
-    // Count quantities that have QC issues but no quantity issues
+    // Count items that have QC issues but no quantity issues
     return this.grnData.filter((item) => 
       item["QC Status"] !== "Passed" && 
       item["QC Status"] !== "Not Performed" && 
       !["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
-    ).reduce((sum, item) => sum + (item["Failed QC Qty"] || 0), 0);
+    ).length;
   }
 
   calculateOnlyQuantityIssues(summaryStats) {
-    // Count quantities that have quantity issues but no QC issues
+    // Count items that have quantity issues but no QC issues
     return this.grnData.filter((item) => 
       (item["QC Status"] === "Passed" || item["QC Status"] === "Not Performed") && 
       ["Shortage", "Excess", "Not Received", "Excess Receipt"].includes(item.Status)
-    ).reduce((sum, item) => {
-      // For quantity issues, sum the relevant quantity based on status
-      if (item.Status === "Shortage") {
-        return sum + (item["Shortage Qty"] || 0);
-      } else if (item.Status === "Excess") {
-        return sum + (item["Excess Qty"] || 0);
-      } else if (item.Status === "Not Received") {
-        return sum + (item["Ordered Qty"] || 0);
-      } else if (item.Status === "Excess Receipt") {
-        return sum + (item["Received Qty"] || 0);
-      }
-      return sum;
-    }, 0);
+    ).length;
   }
 
   calculateWithBothIssues(summaryStats) {
-    // Count quantities that have both QC issues and quantity issues
+    // Count items that have both QC issues and quantity issues
     return this.grnData.filter((item) => 
       item["QC Status"] !== "Passed" && 
       item["QC Status"] !== "Not Performed" && 
       ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
-    ).reduce((sum, item) => {
-      // For items with both issues, sum the failed QC quantity
-      return sum + (item["Failed QC Qty"] || 0);
-    }, 0);
+    ).length;
   }
 
   getCSVHeaders() {

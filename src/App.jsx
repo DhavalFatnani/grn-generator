@@ -187,42 +187,20 @@ const GRNGenerator = () => {
     ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
   ).length;
 
-  // Calculate quantities that are only QC failed (no quantity issues)
+  // Calculate items that are only QC failed (no quantity issues)
   summaryStats.items.onlyQCFailed = grnData.filter((item) => 
     item["QC Status"] !== "Passed" && 
     item["QC Status"] !== "Not Performed" && 
     !["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
-  ).reduce((sum, item) => sum + (item["Failed QC Qty"] || 0), 0);
+  ).length;
 
-  // Calculate quantities that only have quantity issues (no QC issues)
+  // Calculate items that only have quantity issues (no QC issues)
   summaryStats.items.onlyQuantityIssues = grnData.filter((item) => 
     (item["QC Status"] === "Passed" || item["QC Status"] === "Not Performed") && 
     ["Shortage", "Excess", "Not Received", "Excess Receipt"].includes(item.Status)
-  ).reduce((sum, item) => {
-    // For quantity issues, sum the relevant quantity based on status
-    if (item.Status === "Shortage") {
-      return sum + (item["Shortage Qty"] || 0);
-    } else if (item.Status === "Excess") {
-      return sum + (item["Excess Qty"] || 0);
-    } else if (item.Status === "Not Received") {
-      return sum + (item["Ordered Qty"] || 0);
-    } else if (item.Status === "Excess Receipt") {
-      return sum + (item["Received Qty"] || 0);
-    }
-    return sum;
-  }, 0);
+  ).length;
 
-  // Calculate quantities with both QC and quantity issues
-  summaryStats.items.withBothIssues = grnData.filter((item) => 
-    item["QC Status"] !== "Passed" && 
-    item["QC Status"] !== "Not Performed" && 
-    ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
-  ).reduce((sum, item) => {
-    // For items with both issues, sum the failed QC quantity
-    return sum + (item["Failed QC Qty"] || 0);
-  }, 0);
-
-  // Calculate total items with any issues (for verification)
+  // Calculate total items with any issues
   summaryStats.items.withIssues = 
     summaryStats.items.onlyQCFailed + 
     summaryStats.items.onlyQuantityIssues + 
