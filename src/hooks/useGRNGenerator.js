@@ -85,10 +85,15 @@ export const useGRNGenerator = () => {
       "replenishmentNumber",
       "inwardDate",
       "warehouseNo",
-      "qcDoneBy",
       "verifiedBy",
       "warehouseManagerName",
     ];
+    
+    // Only add qcDoneBy to required fields if QC has been performed
+    if (grnHeaderInfo.qcPerformed) {
+      requiredFields.push("qcDoneBy");
+    }
+    
     const missingFields = requiredFields.filter((field) => {
       const value = grnHeaderInfo[field];
       if (field === "qcDoneBy") {

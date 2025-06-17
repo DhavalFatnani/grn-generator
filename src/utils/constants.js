@@ -26,7 +26,6 @@ export const REQUIRED_FIELDS = [
   "replenishmentNumber",
   "inwardDate",
   "warehouseNo",
-  "qcDoneBy",
   "verifiedBy",
   "warehouseManagerName",
 ]; 
