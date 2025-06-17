@@ -1409,13 +1409,26 @@ class GRNExporter {
           // Create a new window for printing
           const printWindow = window.open('', '_blank');
           
-          const exporter = new GRNExporter(grnData, grnHeaderInfo);
           const today = new Date();
           const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
           const grnDocNo = "GRN-KNOT-" + dateStr + "-" + grnHeaderInfo.brandName.replace(/\s+/g, "") + "-" + grnHeaderInfo.replenishmentNumber;
 
-          // Calculate summary statistics
-          const summaryStats = exporter.calculateSummaryStats();
+          // Calculate summary statistics manually
+          const summaryStats = {
+            totalOrderedUnits: grnData.reduce((sum, item) => sum + (item["Ordered Qty"] || 0), 0),
+            totalReceivedUnits: grnData.reduce((sum, item) => sum + (item["Received Qty"] || 0), 0),
+            totalShortageUnits: grnData.reduce((sum, item) => sum + (item["Shortage Qty"] || 0), 0),
+            totalExcessUnits: grnData.reduce((sum, item) => sum + (item["Excess Qty"] || 0), 0),
+            totalNotOrderedUnits: grnData.reduce((sum, item) => sum + (item["Not Ordered Qty"] || 0), 0),
+            totalQcPassedUnits: grnData.reduce((sum, item) => sum + (item["Passed QC Qty"] || 0), 0),
+            totalQcFailedUnits: grnData.reduce((sum, item) => sum + (item["Failed QC Qty"] || 0), 0)
+          };
+          
+          summaryStats.receiptAccuracy = summaryStats.totalOrderedUnits > 0 ? 
+            Math.round(((summaryStats.totalOrderedUnits - summaryStats.totalShortageUnits) / summaryStats.totalOrderedUnits) * 100) : 0;
+          
+          summaryStats.qcPassRate = (summaryStats.totalQcPassedUnits + summaryStats.totalQcFailedUnits) > 0 ? 
+            Math.round((summaryStats.totalQcPassedUnits / (summaryStats.totalQcPassedUnits + summaryStats.totalQcFailedUnits)) * 100) : 0;
 
           // Build QC-related summary cards
           const qcSummaryCards = grnHeaderInfo.qcPerformed ? 
