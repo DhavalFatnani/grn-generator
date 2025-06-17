@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Papa from 'papaparse';
 
 export const useFileUpload = () => {
@@ -11,6 +11,14 @@ export const useFileUpload = () => {
     poNumber: "",
     brandName: "",
   });
+
+  // Debug effect to monitor putAwayData changes
+  useEffect(() => {
+    console.log('putAwayData state changed:', putAwayData.length, 'rows');
+    if (putAwayData.length > 0) {
+      console.log('First putAwayData row:', putAwayData[0]);
+    }
+  }, [putAwayData]);
 
   const handlePurchaseOrderUpload = useCallback((file) => {
     setLoading(true);
@@ -126,38 +134,106 @@ export const useFileUpload = () => {
   }, []);
 
   const handlePutAwayUpload = useCallback((file) => {
+    console.log('Starting Put Away upload for file:', file.name);
+    console.log('File size:', file.size, 'bytes');
+    console.log('File type:', file.type);
+    console.log('File last modified:', new Date(file.lastModified));
+    
     setLoading(true);
     setErrors([]);
 
     Papa.parse(file, {
-      header: true,
+      header: false,
       dynamicTyping: false,
       skipEmptyLines: true,
       complete: (results) => {
+        console.log('Papa Parse completed. Total rows:', results.data.length);
+        console.log('First few rows:', results.data.slice(0, 5));
+        
         try {
           if (results.errors.length > 0) {
+            console.error('Papa Parse errors:', results.errors);
             setErrors(results.errors.map((err) => err.message));
             setLoading(false);
             return;
           }
-          const cleanData = results.data
-            .map((row) => {
-              const cleanRow = {};
-              Object.keys(row).forEach((key) => {
-                const cleanKey = key.trim();
-                cleanRow[cleanKey] = row[key] ? row[key].toString().trim() : "";
-              });
-              return cleanRow;
+          
+          // Find the first header row
+          let headerRowIndex = -1;
+          for (let i = 0; i < results.data.length; i++) {
+            const row = results.data[i];
+            if (row && row.length >= 2) {
+              const firstCol = row[0] ? row[0].toString().trim() : "";
+              const secondCol = row[1] ? row[1].toString().trim() : "";
+              
+              // Check if this looks like a header row
+              if (firstCol.toLowerCase().includes('bin') && 
+                  secondCol.toLowerCase().includes('sku')) {
+                headerRowIndex = i;
+                console.log('Found header row at index:', i, 'with columns:', row);
+                break;
+              }
+            }
+          }
+          
+          if (headerRowIndex === -1) {
+            console.error('No header row found');
+            setErrors(['Could not find header row with BIN LOCATION and SKU ID in Put Away sheet.']);
+            setLoading(false);
+            return;
+          }
+          
+          const headers = results.data[headerRowIndex].map(h => h ? h.toString().trim() : "");
+          console.log('Headers found:', headers);
+          const dataRows = results.data.slice(headerRowIndex + 1);
+          console.log('Data rows after header:', dataRows.length);
+          
+          const cleanData = dataRows
+            .filter(row => {
+              // Skip rows that look like headers
+              if (row && row.length >= 2) {
+                const firstCol = row[0] ? row[0].toString().trim() : "";
+                const secondCol = row[1] ? row[1].toString().trim() : "";
+                
+                // Skip if this looks like a header row
+                if (firstCol.toLowerCase().includes('bin') && 
+                    secondCol.toLowerCase().includes('sku')) {
+                  console.log('Skipping header-like row:', row);
+                  return false;
+                }
+              }
+              
+              // Keep rows with actual data
+              return row && row.some(cell => cell && cell.toString().trim() !== "");
             })
-            .filter((row) => row.SKU && row.SKU !== "");
+            .map((row) => {
+              const obj = {};
+              headers.forEach((header, index) => {
+                obj[header] = row[index] ? row[index].toString().trim() : "";
+              });
+              return obj;
+            })
+            .filter((row) => {
+              // Check for SKU value
+              const skuValue = row['SKU ID'] || row['SKU'];
+              return skuValue && skuValue !== "";
+            });
+          
+          console.log('Put Away data loaded:', cleanData.length, 'rows');
+          console.log('Sample row:', cleanData[0]);
+          console.log('Setting putAwayData state with', cleanData.length, 'rows');
+          
           setPutAwayData(cleanData);
           setLoading(false);
+          console.log('Put Away upload completed successfully');
         } catch (error) {
+          console.error('Error processing Put Away sheet:', error);
           setErrors([`Error processing Put Away sheet: ${error.message}`]);
           setLoading(false);
         }
       },
       error: (error) => {
+        console.error('Papa Parse error:', error);
         setErrors([`File parsing error: ${error.message}`]);
         setLoading(false);
       },
