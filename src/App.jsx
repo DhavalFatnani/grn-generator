@@ -183,18 +183,20 @@ const GRNGenerator = () => {
   // Calculate items with both QC and quantity issues
   summaryStats.items.withBothIssues = grnData.filter((item) => 
     item["QC Status"] !== "Passed" && 
+    item["QC Status"] !== "Not Performed" && 
     ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
   ).length;
 
   // Calculate items that are only QC failed (no quantity issues)
   summaryStats.items.onlyQCFailed = grnData.filter((item) => 
     item["QC Status"] !== "Passed" && 
+    item["QC Status"] !== "Not Performed" && 
     !["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
   ).length;
 
   // Calculate items that only have quantity issues (no QC issues)
   summaryStats.items.onlyQuantityIssues = grnData.filter((item) => 
-    item["QC Status"] === "Passed" && 
+    (item["QC Status"] === "Passed" || item["QC Status"] === "Not Performed") && 
     ["Shortage", "Excess", "Not Received", "Excess Receipt"].includes(item.Status)
   ).length;
 
