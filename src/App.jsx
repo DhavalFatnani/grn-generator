@@ -4,11 +4,11 @@ import _ from "lodash";
 import "./App.css";
 import { FileUploadBox } from "./components/FileUploadBox";
 import { HeaderForm } from "./components/HeaderForm";
-import { SettingsPanel } from "./components/SettingsPanel";
 import { GRNTable } from "./components/GRNTable";
+import { DataPreviewModal } from "./components/DataPreviewModal";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useGRNGenerator } from "./hooks/useGRNGenerator";
-import { downloadCSV, downloadHTML } from "./utils/exportUtils";
+import { downloadCSV, downloadHTML, downloadPDF } from "./utils/exportUtils";
 
 const GRNGenerator = () => {
   // File upload state and handlers
@@ -19,16 +19,19 @@ const GRNGenerator = () => {
     loading: fileLoading,
     errors: fileErrors,
     grnHeaderInfo: fileHeaderInfo,
+    columnMapping,
+    skuCodeType,
+    setSkuCodeType,
+    previewModal,
     handlePurchaseOrderUpload,
     handlePutAwayUpload,
     handleQCFailUpload,
     clearPurchaseOrder,
     clearPutAway,
     clearQCFail,
+    closePreviewModal,
+    handleModalConfirm,
   } = useFileUpload();
-
-  // Local state for GRN generation
-  const [skuCodeType, setSkuCodeType] = useState("KNOT");
 
   const [grnHeaderInfo, setGrnHeaderInfo] = useState({
     ...fileHeaderInfo,
@@ -49,14 +52,6 @@ const GRNGenerator = () => {
     warehouseManagers: ["Shoeb Sheikh"],
   });
 
-  // Settings state
-  const [settings, setSettings] = useState({
-    autoFillHeader: true,
-    showQCStatus: true,
-    defaultWarehouse: "",
-    defaultManager: "",
-  });
-
   // GRN generation hook
   const {
     grnData,
@@ -67,13 +62,11 @@ const GRNGenerator = () => {
 
   // Update header info when file header info changes
   React.useEffect(() => {
-    if (settings.autoFillHeader) {
-      setGrnHeaderInfo((prev) => ({
-        ...prev,
-        ...fileHeaderInfo,
-      }));
-    }
-  }, [fileHeaderInfo, settings.autoFillHeader]);
+    setGrnHeaderInfo((prev) => ({
+      ...prev,
+      ...fileHeaderInfo,
+    }));
+  }, [fileHeaderInfo]);
 
   const handleHeaderChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -103,18 +96,41 @@ const GRNGenerator = () => {
     downloadHTML(grnData, grnHeaderInfo);
   }, [grnData, grnHeaderInfo]);
 
+  const handleDownloadPDF = useCallback(() => {
+    console.log('Download PDF clicked');
+    console.log('GRN Data:', grnData);
+    console.log('GRN Header Info:', grnHeaderInfo);
+    if (!grnData || grnData.length === 0) {
+      console.error('No GRN data available for download');
+      return;
+    }
+    if (!grnHeaderInfo || !grnHeaderInfo.brandName || !grnHeaderInfo.replenishmentNumber) {
+      console.error('Missing required header information for download');
+      return;
+    }
+    downloadPDF(grnData, grnHeaderInfo);
+  }, [grnData, grnHeaderInfo]);
+
   const getStatusColor = useCallback((status) => {
+    if (!status) return "text-gray-600";
+    
     switch (status.toLowerCase()) {
       case "complete":
+      case "received":
         return "text-green-600";
       case "shortage":
+      case "shortage & qc failed":
         return "text-orange-600";
       case "excess":
+      case "excess & qc failed":
         return "text-blue-600";
       case "not received":
         return "text-red-600";
       case "not ordered":
+      case "excess receipt":
         return "text-purple-600";
+      case "qc failed receipt":
+        return "text-red-600";
       default:
         return "text-gray-600";
     }
@@ -123,13 +139,13 @@ const GRNGenerator = () => {
   // Calculate summary statistics
   const summaryStats = {
     totalItems: grnData.length,
-    totalOrderedQty: grnData.reduce((sum, item) => sum + item["Ordered Qty"], 0),
-    totalReceivedQty: grnData.reduce((sum, item) => sum + item["Received Qty"], 0),
+    totalOrderedQty: grnData.reduce((sum, item) => sum + (item["Ordered Qty"] || 0), 0),
+    totalReceivedQty: grnData.reduce((sum, item) => sum + (item["Received Qty"] || 0), 0),
     totalPassedQCQty: grnData.reduce((sum, item) => sum + (item["Passed QC Qty"] || 0), 0),
     totalFailedQCQty: grnData.reduce((sum, item) => sum + (item["Failed QC Qty"] || 0), 0),
     items: {
       complete: grnData.filter((item) => 
-        item.Status === "Complete" && item["QC Status"] === "Passed"
+        item.Status === "Received" && item["QC Status"] === "Passed"
       ).length,
       partialQC: grnData.filter((item) => 
         item["QC Status"] === "Partial"
@@ -138,22 +154,22 @@ const GRNGenerator = () => {
         item["QC Status"] === "Failed"
       ).length,
       quantityIssues: {
-        shortage: grnData.filter((item) => item.Status === "Shortage").length,
-        excess: grnData.filter((item) => item.Status === "Excess").length,
+        shortage: grnData.filter((item) => item.Status === "Shortage" || item.Status === "Shortage & QC Failed").length,
+        excess: grnData.filter((item) => item.Status === "Excess" || item.Status === "Excess & QC Failed").length,
         notReceived: grnData.filter((item) => item.Status === "Not Received").length,
-        notOrdered: grnData.filter((item) => item.Status === "Not Ordered").length,
+        notOrdered: grnData.filter((item) => item.Status === "Excess Receipt").length,
       }
     },
     quantities: {
       shortage: grnData.reduce((sum, item) => sum + (item["Shortage Qty"] || 0), 0),
       excess: grnData.reduce((sum, item) => sum + (item["Excess Qty"] || 0), 0),
       notReceived: grnData.filter(item => item.Status === "Not Received")
-        .reduce((sum, item) => sum + item["Ordered Qty"], 0),
-      notOrdered: grnData.filter(item => item.Status === "Not Ordered")
-        .reduce((sum, item) => sum + item["Received Qty"], 0),
+        .reduce((sum, item) => sum + (item["Ordered Qty"] || 0), 0),
+      notOrdered: grnData.filter(item => item.Status === "Excess Receipt")
+        .reduce((sum, item) => sum + (item["Received Qty"] || 0), 0),
       // QC quantity statistics
       completeQC: grnData.filter((item) => 
-        item.Status === "Complete" && item["QC Status"] === "Passed"
+        item.Status === "Received" && item["QC Status"] === "Passed"
       ).reduce((sum, item) => sum + (item["Passed QC Qty"] || 0), 0),
       partialQC: grnData.filter((item) => 
         item["QC Status"] === "Partial"
@@ -167,7 +183,7 @@ const GRNGenerator = () => {
   // Calculate items with both QC and quantity issues
   summaryStats.items.withBothIssues = grnData.filter((item) => 
     item["QC Status"] !== "Passed" && 
-    ["Shortage", "Excess", "Not Received", "Not Ordered"].includes(item.Status)
+    ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
   ).length;
 
   // Calculate items that are only QC failed (no quantity issues)
@@ -223,8 +239,9 @@ const GRNGenerator = () => {
       qcFailData,
       skuCodeType,
       grnHeaderInfo,
+      columnMapping,
     });
-  }, [generateGRN, purchaseOrderData, putAwayData, qcFailData, skuCodeType, grnHeaderInfo]);
+  }, [generateGRN, purchaseOrderData, putAwayData, qcFailData, skuCodeType, grnHeaderInfo, columnMapping]);
 
   const allErrors = [...fileErrors, ...grnErrors];
   const isLoading = fileLoading || grnLoading;
@@ -285,22 +302,6 @@ const GRNGenerator = () => {
           />
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
-            Settings
-          </h2>
-          <SettingsPanel
-            showSettings={true} /* Always visible */
-            setShowSettings={() => {}} /* No-op for consistency */
-            settings={settings}
-            setSettings={setSettings}
-            setSkuCodeType={setSkuCodeType}
-            skuCodeType={skuCodeType}
-            previousValues={previousValues}
-            setPreviousValues={setPreviousValues}
-          />
-        </div>
-
         <div className="flex justify-center mb-8">
           <button
             onClick={handleGenerateGRN}
@@ -333,12 +334,25 @@ const GRNGenerator = () => {
               getStatusColor={getStatusColor}
               handleDownloadCSV={handleDownloadCSV}
               handleDownloadGRN={handleDownloadGRN}
-              showQCStatus={settings.showQCStatus}
+              handleDownloadPDF={handleDownloadPDF}
               grnHeaderInfo={grnHeaderInfo}
               skuCodeType={skuCodeType}
             />
           </div>
         )}
+
+        {/* Data Preview Modal */}
+        <DataPreviewModal
+          isOpen={previewModal.isOpen}
+          onClose={closePreviewModal}
+          onConfirm={handleModalConfirm}
+          processedData={previewModal.processedData}
+          fileType={previewModal.fileType}
+          detectedHeaders={previewModal.detectedHeaders}
+          skuCodeType={skuCodeType}
+          setSkuCodeType={setSkuCodeType}
+          rawData={previewModal.rawData}
+        />
       </div>
     </div>
   );

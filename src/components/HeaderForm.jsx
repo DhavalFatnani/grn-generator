@@ -73,39 +73,6 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
         </p>
       </div>
 
-      {/* Auto-extracted Information */}
-      <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">Auto-extracted Information</h3>
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              PO Number
-            </label>
-            <input
-              type="text"
-              value={grnHeaderInfo.poNumber}
-              onChange={handleHeaderChange}
-              name="poNumber"
-              className="w-full p-2 border border-gray-200 rounded-md bg-gray-100 text-gray-700 font-medium cursor-not-allowed"
-              readOnly
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Brand Name
-            </label>
-            <input
-              type="text"
-              value={grnHeaderInfo.brandName}
-              onChange={handleHeaderChange}
-              name="brandName"
-              className="w-full p-2 border border-gray-200 rounded-md bg-gray-100 text-gray-700 font-medium cursor-not-allowed"
-              readOnly
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Required GRN Information */}
       <div className="mb-8">
         <h3 className="text-sm font-medium text-gray-700 mb-3">Required GRN Information</h3>
@@ -128,14 +95,16 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
             <label className="block text-sm font-medium text-gray-600 mb-1">
               Inward Date <span className="text-blue-500">*</span>
             </label>
-            <input
-              type="date"
-              value={grnHeaderInfo.inwardDate}
-              onChange={handleHeaderChange}
-              name="inwardDate"
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              required
-            />
+            <div className="relative">
+              <input
+                type="date"
+                value={grnHeaderInfo.inwardDate}
+                onChange={handleHeaderChange}
+                name="inwardDate"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer"
+                required
+              />
+            </div>
           </div>
         </div>
       </div>

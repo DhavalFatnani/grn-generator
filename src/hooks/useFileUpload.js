@@ -12,6 +12,19 @@ export const useFileUpload = () => {
     brandName: "",
   });
 
+  // Column mapping state
+  const [columnMapping, setColumnMapping] = useState({});
+
+  // Preview modal state
+  const [previewModal, setPreviewModal] = useState({
+    isOpen: false,
+    fileType: "",
+    processedData: [],
+    rawData: [],
+    detectedHeaders: null,
+    onConfirm: null
+  });
+
   // Debug effect to monitor putAwayData changes
   useEffect(() => {
     console.log('putAwayData state changed:', putAwayData.length, 'rows');
@@ -35,6 +48,7 @@ export const useFileUpload = () => {
             setLoading(false);
             return;
           }
+
           // Extract PO Number from J6 (row 5, column 9)
           let poNumber = "";
           if (
@@ -80,7 +94,8 @@ export const useFileUpload = () => {
             }
           }
           setGrnHeaderInfo((prev) => ({ ...prev, poNumber, brandName }));
-          // Find header row
+
+          // Find header row automatically
           let headerRowIndex = -1;
           for (let i = 0; i < results.data.length; i++) {
             const row = results.data[i];
@@ -94,18 +109,10 @@ export const useFileUpload = () => {
               break;
             }
           }
-          if (headerRowIndex === -1) {
-            setErrors([
-              'Could not find header row with "Sno" in Purchase Order.',
-            ]);
-            setLoading(false);
-            return;
-          }
-          const headers = results.data[headerRowIndex].map((h) =>
-            (h || "").toString().trim(),
-          );
-          const dataRows = results.data.slice(headerRowIndex + 1);
-          const processedData = dataRows
+
+          // Process the data first
+          const processedData = results.data
+            .slice(headerRowIndex + 1)
             .filter(
               (row) =>
                 row &&
@@ -113,13 +120,30 @@ export const useFileUpload = () => {
             )
             .map((row) => {
               const obj = {};
+              const headers = results.data[headerRowIndex].map(h => (h || "").toString().trim());
               headers.forEach((header, index) => {
                 obj[header] = row[index] ? row[index].toString().trim() : "";
               });
               return obj;
             })
             .filter((obj) => obj["Sno"] && obj["Sno"] !== "");
-          setPurchaseOrderData(processedData);
+
+          // Show preview modal for confirmation
+          setPreviewModal({
+            isOpen: true,
+            fileType: "Purchase Order",
+            processedData: processedData,
+            rawData: results.data,
+            detectedHeaders: headerRowIndex >= 0 ? {
+              rowIndex: headerRowIndex,
+              headers: results.data[headerRowIndex].map(h => (h || "").toString().trim())
+            } : null,
+            onConfirm: (selectedData) => {
+              processPurchaseOrderData(selectedData, poNumber, brandName);
+              setPreviewModal(prev => ({ ...prev, isOpen: false }));
+            }
+          });
+
           setLoading(false);
         } catch (error) {
           setErrors([`Error processing Purchase Order: ${error.message}`]);
@@ -132,6 +156,49 @@ export const useFileUpload = () => {
       },
     });
   }, []);
+
+  const processPurchaseOrderData = (selectedData, poNumber, brandName) => {
+    const { headers, data, grnHeaderInfo } = selectedData;
+    
+    // Update GRN header info with selected values
+    if (grnHeaderInfo) {
+      setGrnHeaderInfo(prev => ({
+        ...prev,
+        poNumber: grnHeaderInfo.poNumber?.value || poNumber,
+        brandName: grnHeaderInfo.brandName?.value || brandName,
+        replenishmentNumber: grnHeaderInfo.replenishmentNumber?.value || "",
+        inwardDate: grnHeaderInfo.inwardDate?.value || "",
+        warehouseNo: grnHeaderInfo.warehouseNo?.value || "",
+        verifiedBy: grnHeaderInfo.verifiedBy?.value || "",
+        warehouseManagerName: grnHeaderInfo.warehouseManagerName?.value || ""
+      }));
+    }
+    
+    const processedData = data
+      .filter(
+        (row) =>
+          row &&
+          row.some((cell) => cell && cell.toString().trim() !== ""),
+      )
+      .map((row) => {
+        const obj = {};
+        headers.forEach((header, index) => {
+          // Trim both header and value for each cell
+          const trimmedHeader = header.trim();
+          obj[trimmedHeader] = row[index] ? row[index].toString().trim() : "";
+        });
+        // Additionally, trim all string values in the object (in case of extra spaces in CSV)
+        Object.keys(obj).forEach((key) => {
+          if (typeof obj[key] === 'string') {
+            obj[key] = obj[key].trim();
+          }
+        });
+        return obj;
+      })
+      .filter((obj) => obj["Sno"] && obj["Sno"] !== "");
+    
+    setPurchaseOrderData(processedData);
+  };
 
   const handlePutAwayUpload = useCallback((file) => {
     console.log('Starting Put Away upload for file:', file.name);
@@ -176,19 +243,9 @@ export const useFileUpload = () => {
             }
           }
           
-          if (headerRowIndex === -1) {
-            console.error('No header row found');
-            setErrors(['Could not find header row with BIN LOCATION and SKU ID in Put Away sheet.']);
-            setLoading(false);
-            return;
-          }
-          
-          const headers = results.data[headerRowIndex].map(h => h ? h.toString().trim() : "");
-          console.log('Headers found:', headers);
-          const dataRows = results.data.slice(headerRowIndex + 1);
-          console.log('Data rows after header:', dataRows.length);
-          
-          const cleanData = dataRows
+          // Process the data first
+          const processedData = results.data
+            .slice(headerRowIndex + 1)
             .filter(row => {
               // Skip rows that look like headers
               if (row && row.length >= 2) {
@@ -208,6 +265,7 @@ export const useFileUpload = () => {
             })
             .map((row) => {
               const obj = {};
+              const headers = results.data[headerRowIndex].map(h => (h || "").toString().trim());
               headers.forEach((header, index) => {
                 obj[header] = row[index] ? row[index].toString().trim() : "";
               });
@@ -219,13 +277,23 @@ export const useFileUpload = () => {
               return skuValue && skuValue !== "";
             });
           
-          console.log('Put Away data loaded:', cleanData.length, 'rows');
-          console.log('Sample row:', cleanData[0]);
-          console.log('Setting putAwayData state with', cleanData.length, 'rows');
-          
-          setPutAwayData(cleanData);
+          // Show preview modal for confirmation
+          setPreviewModal({
+            isOpen: true,
+            fileType: "Put Away",
+            processedData: processedData,
+            rawData: results.data,
+            detectedHeaders: headerRowIndex >= 0 ? {
+              rowIndex: headerRowIndex,
+              headers: results.data[headerRowIndex].map(h => (h || "").toString().trim())
+            } : null,
+            onConfirm: (selectedData) => {
+              processPutAwayData(selectedData);
+              setPreviewModal(prev => ({ ...prev, isOpen: false }));
+            }
+          });
+
           setLoading(false);
-          console.log('Put Away upload completed successfully');
         } catch (error) {
           console.error('Error processing Put Away sheet:', error);
           setErrors([`Error processing Put Away sheet: ${error.message}`]);
@@ -239,6 +307,48 @@ export const useFileUpload = () => {
       },
     });
   }, []);
+
+  const processPutAwayData = (selectedData) => {
+    const { headers, data } = selectedData;
+    
+    const cleanData = data
+      .filter(row => {
+        // Skip rows that look like headers
+        if (row && row.length >= 2) {
+          const firstCol = row[0] ? row[0].toString().trim() : "";
+          const secondCol = row[1] ? row[1].toString().trim() : "";
+          
+          // Skip if this looks like a header row
+          if (firstCol.toLowerCase().includes('bin') && 
+              secondCol.toLowerCase().includes('sku')) {
+            console.log('Skipping header-like row:', row);
+            return false;
+          }
+        }
+        
+        // Keep rows with actual data
+        return row && row.some(cell => cell && cell.toString().trim() !== "");
+      })
+      .map((row) => {
+        const obj = {};
+        headers.forEach((header, index) => {
+          obj[header] = row[index] ? row[index].toString().trim() : "";
+        });
+        return obj;
+      })
+      .filter((row) => {
+        // Check for SKU value
+        const skuValue = row['SKU ID'] || row['SKU'];
+        return skuValue && skuValue !== "";
+      });
+    
+    console.log('Put Away data loaded:', cleanData.length, 'rows');
+    console.log('Sample row:', cleanData[0]);
+    console.log('Setting putAwayData state with', cleanData.length, 'rows');
+    
+    setPutAwayData(cleanData);
+    console.log('Put Away upload completed successfully');
+  };
 
   const handleQCFailUpload = useCallback((file) => {
     setLoading(true);
@@ -292,6 +402,44 @@ export const useFileUpload = () => {
     setQcFailData([]);
   }, []);
 
+  const closePreviewModal = useCallback(() => {
+    setPreviewModal(prev => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleModalConfirm = (modalData) => {
+    const { headers, data, grnHeaderInfo, columnMapping, skuCodeType } = modalData;
+    
+    // Update GRN header information if provided
+    if (grnHeaderInfo) {
+      setGrnHeaderInfo(prev => ({
+        ...prev,
+        poNumber: grnHeaderInfo.poNumber?.value || prev.poNumber,
+        brandName: grnHeaderInfo.brandName?.value || prev.brandName
+      }));
+    }
+
+    // Store the processed data and column mapping based on file type
+    if (previewModal.fileType === "Purchase Order") {
+      setPurchaseOrderData(data);
+      setColumnMapping(columnMapping || {});
+      // Update SKU code type if provided
+      if (skuCodeType) {
+        // We'll need to pass this back to the parent component
+        // For now, we'll store it in the modal state
+        setPreviewModal(prev => ({ ...prev, skuCodeType }));
+      }
+    } else if (previewModal.fileType === "Put Away") {
+      setPutAwayData(data);
+    }
+    
+    // Close the modal
+    setPreviewModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const setSkuCodeType = useCallback((newSkuCodeType) => {
+    setPreviewModal(prev => ({ ...prev, skuCodeType: newSkuCodeType }));
+  }, []);
+
   return {
     purchaseOrderData,
     putAwayData,
@@ -299,11 +447,17 @@ export const useFileUpload = () => {
     loading,
     errors,
     grnHeaderInfo,
+    columnMapping,
+    skuCodeType: previewModal.skuCodeType || "KNOT",
+    setSkuCodeType,
+    previewModal,
     handlePurchaseOrderUpload,
     handlePutAwayUpload,
     handleQCFailUpload,
     clearPurchaseOrder,
     clearPutAway,
     clearQCFail,
+    closePreviewModal,
+    handleModalConfirm,
   };
 }; 

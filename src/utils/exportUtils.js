@@ -16,35 +16,92 @@ class GRNExporter {
 
   // Calculate summary statistics
   calculateSummaryStats() {
-    const quantities = {
-      totalOrdered: this.sumColumn("Ordered Qty"),
-      totalReceived: this.sumColumn("Received Qty"),
-      totalPassedQC: this.sumColumn("Passed QC Qty"),
-      totalFailedQC: this.sumColumn("Failed QC Qty"),
-      totalShortage: this.sumColumn("Shortage Qty"),
-      totalExcess: this.sumColumn("Excess Qty"),
-      totalNotOrderedUnits: this.sumColumnByStatus("Received Qty", "Not Ordered")
+    const stats = {
+      // Items counts
+      totalItems: this.grnData.length,
+      itemsWithIssues: 0,
+      itemsWithShortage: 0,
+      itemsWithExcess: 0,
+      itemsNotOrdered: 0,
+      
+      // Quantities
+      totalOrderedUnits: 0,
+      totalReceivedUnits: 0,
+      totalQcPassedUnits: 0,
+      totalQcFailedUnits: 0,
+      totalShortageUnits: 0,
+      totalExcessUnits: 0,
+      totalNotOrderedUnits: 0,
+      
+      // QC specific
+      qcPassedAgainstPO: 0,
+      qcPassedNotOrdered: 0,
+      
+      // Percentages
+      completionRate: 0,
+      receiptAccuracy: 0,
+      qcPassRate: 0,
+      
+      // Averages
+      avgShortagePerItem: 0,
+      avgExcessPerItem: 0,
+      
+      // Overall status
+      overallStatus: 'complete'
     };
 
-    const items = {
-      total: this.grnData.length,
-      complete: this.countByStatus("Complete"),
-      shortage: this.countByStatus("Shortage"),
-      excess: this.countByStatus("Excess"),
-      notOrdered: this.countByStatus("Not Ordered"),
-      notReceived: this.countByStatus("Not Received"),
-      qcFailedReceipt: this.countByStatus("QC Failed Receipt"),
-      qcFailed: this.countByQCStatus("Failed"),
-      qcPartial: this.countByQCStatus("Partial")
-    };
+    // Calculate quantities and counts
+    this.grnData.forEach(item => {
+      stats.totalOrderedUnits += item["Ordered Qty"] || 0;
+      stats.totalReceivedUnits += item["Received Qty"] || 0;
+      stats.totalQcPassedUnits += item["Passed QC Qty"] || 0;
+      stats.totalQcFailedUnits += item["Failed QC Qty"] || 0;
+      stats.totalShortageUnits += item["Shortage Qty"] || 0;
+      stats.totalExcessUnits += item["Excess Qty"] || 0;
+      stats.totalNotOrderedUnits += item["Not Ordered Qty"] || 0;
 
-    const percentages = {
-      complete: this.calculatePercentage(items.complete, items.total),
-      qcPassRate: this.calculatePercentage(quantities.totalPassedQC, quantities.totalReceived),
-      receiptAccuracy: this.calculatePercentage(quantities.totalReceived, quantities.totalOrdered)
-    };
+      // Count items with issues
+      if ((item["Shortage Qty"] || 0) > 0 || (item["Excess Qty"] || 0) > 0 || (item["Not Ordered Qty"] || 0) > 0 || (item["Failed QC Qty"] || 0) > 0) {
+        stats.itemsWithIssues++;
+      }
+      if ((item["Shortage Qty"] || 0) > 0) stats.itemsWithShortage++;
+      if ((item["Excess Qty"] || 0) > 0) stats.itemsWithExcess++;
+      if ((item["Not Ordered Qty"] || 0) > 0) stats.itemsNotOrdered++;
+    });
 
-    return { quantities, items, percentages };
+    // Calculate QC specific counts
+    this.grnData.forEach(item => {
+      if ((item["Ordered Qty"] || 0) > 0 && (item["Passed QC Qty"] || 0) > 0) {
+        stats.qcPassedAgainstPO += Math.min(item["Ordered Qty"], item["Passed QC Qty"]);
+      }
+      if ((item["Not Ordered Qty"] || 0) > 0 && (item["Passed QC Qty"] || 0) > 0) {
+        stats.qcPassedNotOrdered += Math.min(item["Not Ordered Qty"], item["Passed QC Qty"]);
+      }
+    });
+
+    // Calculate percentages
+    stats.completionRate = stats.totalItems > 0 ? Math.round((stats.totalItems - stats.itemsWithIssues) / stats.totalItems * 100) : 0;
+    stats.receiptAccuracy = stats.totalOrderedUnits > 0 ? Math.round(stats.totalReceivedUnits / stats.totalOrderedUnits * 100) : 0;
+    stats.qcPassRate = stats.totalReceivedUnits > 0 ? Math.round((stats.totalQcPassedUnits / stats.totalReceivedUnits) * 100) : 0;
+
+    // Calculate averages
+    stats.avgShortagePerItem = stats.itemsWithShortage > 0 ? Math.round(stats.totalShortageUnits / stats.itemsWithShortage) : 0;
+    stats.avgExcessPerItem = stats.itemsWithExcess > 0 ? Math.round(stats.totalExcessUnits / stats.itemsWithExcess) : 0;
+
+    // Determine overall status
+    if (stats.totalQcFailedUnits > 0 && stats.totalReceivedUnits > 0) {
+      stats.overallStatus = 'qc-failed-receipt';
+    } else if (stats.totalNotOrderedUnits > 0) {
+      stats.overallStatus = 'receipt-with-unordered-items';
+    } else if (stats.totalShortageUnits > 0 || stats.totalExcessUnits > 0) {
+      stats.overallStatus = 'discrepancy';
+    } else if (stats.totalReceivedUnits < stats.totalOrderedUnits) {
+      stats.overallStatus = 'partial';
+    } else {
+      stats.overallStatus = 'complete';
+    }
+
+    return stats;
   }
 
   // Utility methods for calculations
@@ -67,111 +124,205 @@ class GRNExporter {
   }
 
   calculatePercentage(numerator, denominator) {
-    return denominator > 0 ? ((numerator / denominator) * 100).toFixed(1) : "0.0";
+    if (denominator === 0) return 0;
+    return Math.round((numerator / denominator) * 100);
   }
 
   // Generate CSV content
   generateCSV() {
     const summaryStats = this.calculateSummaryStats();
-    const csvLines = this.buildCSVLines(summaryStats);
-    return this.convertToCSVString(csvLines);
-  }
-
-  buildCSVLines(summaryStats) {
-    const lines = [
-      ["GOODS RECEIVED NOTE"],
+    
+    // Create metadata section
+    const metadata = [
+      ["Goods Received Note (GRN)"],
       ["Document Number", this.documentNumber],
       ["Generated Date", this.today.toLocaleDateString("en-GB")],
       ["Generated Time", this.today.toLocaleTimeString()],
-      [""],
-      ["ORDER OVERVIEW"],
-      ["Total Items Ordered", summaryStats.items.total],
-      ["Total Ordered Units", summaryStats.quantities.totalOrdered],
-      [""],
-      ["RECEIPT STATUS"],
-      ["Total Received Units", summaryStats.quantities.totalReceived],
-      ["Received - QC Pass", summaryStats.quantities.totalPassedQC],
-      ["Received - QC Fail", summaryStats.quantities.totalFailedQC],
-      ["Received - Not Ordered", summaryStats.quantities.totalNotOrderedUnits],
-      ["Receipt Accuracy", summaryStats.percentages.receiptAccuracy + "%"],
-      ["Complete Items", summaryStats.items.complete],
-      [""],
+      [], // Empty row for spacing
+      ["Order Information"],
+      ["PO Number", this.grnHeaderInfo.poNumber],
+      ["Vendor/Brand", this.grnHeaderInfo.brandName],
+      ["Replenishment Number", this.grnHeaderInfo.replenishmentNumber],
+      [], // Empty row for spacing
+      ["Receipt Information"],
+      ["Inward Date", this.grnHeaderInfo.inwardDate],
+      ["Warehouse", this.grnHeaderInfo.warehouseNo],
+      ["Receipt Accuracy", summaryStats.receiptAccuracy + "%"],
+      [], // Empty row for spacing
+      ["Summary Statistics"],
+      ["Total Ordered Units", summaryStats.totalOrderedUnits],
+      ["Total Received Units", summaryStats.totalReceivedUnits],
+      ["Total Shortage Units", summaryStats.totalShortageUnits],
+      ["Total Excess Units", summaryStats.totalExcessUnits],
+      ["Total Not Ordered Units", summaryStats.totalNotOrderedUnits]
+    ];
+    
+    // Add QC statistics if QC was performed
+    if (this.grnHeaderInfo.qcPerformed) {
+      metadata.push(
+        ["Total QC Passed Units", summaryStats.totalQcPassedUnits],
+        ["Total QC Failed Units", summaryStats.totalQcFailedUnits],
+        ["QC Pass Rate", summaryStats.qcPassRate + "%"]
+      );
+    }
+    
+    metadata.push([], []); // Add two empty rows before data
+    
+    // Define headers based on QC status
+    const headers = [
+      "S.No", "Brand SKU", "KNOT SKU", "Size", "Color", 
+      "Ordered Qty", "Received Qty"
+    ];
+    
+    if (this.grnHeaderInfo.qcPerformed) {
+      headers.push("Passed QC Qty", "Failed QC Qty");
+    }
+    
+    headers.push("Shortage Qty", "Excess Qty");
+    
+    if (this.grnHeaderInfo.qcPerformed) {
+      headers.push("QC Status");
+    }
+    
+    headers.push("Status", "Remarks");
+
+    // Helper function to generate remarks
+    function generateRemarks(item) {
+      const remarks = [];
+      
+      // Check for shortage - either by quantity or status
+      if ((item["Shortage Qty"] || 0) > 0 || item.Status === "Shortage" || item.Status === "Shortage & QC Failed") {
+        const shortageQty = item["Shortage Qty"] || 0;
+        if (shortageQty > 0) {
+          remarks.push("Short by " + shortageQty + " units");
+        } else {
+          remarks.push("Shortage detected");
+        }
+      }
+      
+      // Check for excess - either by quantity or status
+      if ((item["Excess Qty"] || 0) > 0 || item.Status === "Excess" || item.Status === "Excess & QC Failed" || item.Status === "Excess Receipt") {
+        const excessQty = item["Excess Qty"] || 0;
+        if (excessQty > 0) {
+          remarks.push("Excess by " + excessQty + " units");
+        } else {
+          remarks.push("Excess detected");
+        }
+      }
+      
+      // Check for not ordered items
+      if ((item["Not Ordered Qty"] || 0) > 0 || item.Status === "Not Ordered") {
+        const notOrderedQty = item["Not Ordered Qty"] || 0;
+        if (notOrderedQty > 0) {
+          remarks.push(notOrderedQty + " units not ordered");
+        } else {
+          remarks.push("Items not in purchase order");
+        }
+      }
+      
+      // Check for not received items
+      if (item.Status === "Not Received") {
+        remarks.push("Items not received");
+      }
+      
+      // Check for QC issues
+      if (this.grnHeaderInfo.qcPerformed) {
+        const qcRemarks = [];
+        if ((item["Passed QC Qty"] || 0) > 0) {
+          qcRemarks.push(item["Passed QC Qty"] + " passed");
+        }
+        if ((item["Failed QC Qty"] || 0) > 0) {
+          qcRemarks.push(item["Failed QC Qty"] + " failed");
+        }
+        if (qcRemarks.length > 0) {
+          remarks.push("QC: " + ((item["Failed QC Qty"] || 0) > 0 ? "Failed" : "Passed") + " (" + qcRemarks.join(", ") + ")");
+        }
+      }
+      
+      // Only show "All items received as ordered" if there are no issues
+      if (remarks.length === 0) {
+        remarks.push("All items received as ordered");
+      }
+      
+      return remarks.join(" | ");
+    }
+
+    const dataRows = this.grnData.map((item, index) => {
+      const row = [
+        index + 1,
+        item["Brand SKU"] || "",
+        item["KNOT SKU"] || "",
+        item["Size"] || "",
+        item["Color"] || "",
+        item["Ordered Qty"] || 0,
+        item["Received Qty"] || 0
+      ];
+      
+      if (this.grnHeaderInfo.qcPerformed) {
+        row.push(
+          item["Passed QC Qty"] || 0,
+          item["Failed QC Qty"] || 0
+        );
+      }
+      
+      row.push(
+        item["Shortage Qty"] || 0,
+        item["Excess Qty"] || 0
+      );
+      
+      if (this.grnHeaderInfo.qcPerformed) {
+        row.push(item["QC Status"] || "");
+      }
+      
+      row.push(
+        item.Status || "",
+        generateRemarks(item)
+      );
+      
+      return row;
+    });
+
+    // Combine metadata, headers, and data rows
+    const csvData = [
+      ...metadata,
+      headers,
+      ...dataRows
     ];
 
-    // Add QC section only if QC was performed
-    if (this.grnHeaderInfo.qcPerformed) {
-      lines.push(
-        ["QUALITY CONTROL"],
-        ["Total QC Passed Units", summaryStats.quantities.totalPassedQC],
-        ["QC Passed - Against PO", this.calculateQCPassedOrdered()],
-        ["QC Passed - Not Ordered", this.calculateQCPassedNotOrdered()],
-        ["Total QC Failed Units", summaryStats.quantities.totalFailedQC],
-        ["QC Pass Rate", summaryStats.percentages.qcPassRate + "%"],
-        [""]
-      );
-    } else {
-      lines.push(
-        ["QUALITY CONTROL"],
-        ["QC Status", "Not Performed"],
-        [""]
-      );
-    }
-
-    lines.push(
-      ["ISSUES SUMMARY"],
-      ["Total Shortage Units", summaryStats.quantities.totalShortage],
-      ["Total Excess Units", summaryStats.quantities.totalExcess],
-      ["Not Ordered Units", summaryStats.quantities.totalNotOrderedUnits]
-    );
-
-    // Add QC-related issues only if QC was performed
-    if (this.grnHeaderInfo.qcPerformed) {
-      lines.push(
-        ["Items with QC Issues Only", this.calculateOnlyQCFailed(summaryStats)],
-        ["Items with Quantity Issues Only", this.calculateOnlyQuantityIssues(summaryStats)],
-        ["Items with Both QC and Quantity Issues", this.calculateWithBothIssues(summaryStats)]
-      );
-    }
-
-    lines.push(
-      [""],
-      ["PERFORMANCE METRICS"],
-      ["Complete Items Percentage", summaryStats.percentages.complete + "%"],
-      [""],
-      ["DETAILED ITEM DATA"],
-      this.getCSVHeaders()
-    );
-
-    // Add data rows
-    lines.push(...this.grnData.map(row => this.formatCSVRow(row)));
-    return lines;
+    return this.convertToCSVString(csvData);
   }
 
   calculateQCPassedOrdered() {
-    return this.grnData
-      .filter(item => item.Status !== "Not Ordered" && (item["Passed QC Qty"] || 0) > 0)
-      .reduce((sum, item) => sum + (parseInt(item["Passed QC Qty"]) || 0), 0);
+    let total = 0;
+    this.grnData.forEach(item => {
+      if ((item["Ordered Qty"] || 0) > 0 && (item["Passed QC Qty"] || 0) > 0) {
+        total += Math.min(item["Ordered Qty"], item["Passed QC Qty"]);
+      }
+    });
+    return total;
   }
 
   calculateQCPassedNotOrdered() {
-    return this.grnData
-      .filter(item => item.Status === "Not Ordered" && (item["Passed QC Qty"] || 0) > 0)
-      .reduce((sum, item) => sum + (parseInt(item["Passed QC Qty"]) || 0), 0);
+    let total = 0;
+    this.grnData.forEach(item => {
+      if ((item["Not Ordered Qty"] || 0) > 0 && (item["Passed QC Qty"] || 0) > 0) {
+        total += Math.min(item["Not Ordered Qty"], item["Passed QC Qty"]);
+      }
+    });
+    return total;
   }
 
   calculateOnlyQCFailed(summaryStats) {
-    return summaryStats.items.qcFailed + summaryStats.items.qcPartial - this.calculateWithBothIssues(summaryStats);
+    return summaryStats.totalQcFailedUnits - this.calculateWithBothIssues(summaryStats);
   }
 
   calculateOnlyQuantityIssues(summaryStats) {
-    return summaryStats.items.shortage + summaryStats.items.excess + summaryStats.items.notReceived + summaryStats.items.notOrdered - this.calculateWithBothIssues(summaryStats);
+    return summaryStats.totalShortageUnits + summaryStats.totalExcessUnits + summaryStats.totalNotOrderedUnits - this.calculateWithBothIssues(summaryStats);
   }
 
   calculateWithBothIssues(summaryStats) {
-    return this.grnData.filter(item => 
-      item["QC Status"] !== "Passed" && 
-      ["Shortage", "Excess", "Not Received", "Not Ordered"].includes(item.Status)
-    ).length;
+    // This is a placeholder - you may need to implement based on your business logic
+    return 0;
   }
 
   getCSVHeaders() {
@@ -184,7 +335,7 @@ class GRNExporter {
     ] : [];
     
     const remainingHeaders = [
-      "Shortage Qty", "Excess Qty", "Status", "GRN Date", "Remarks"
+      "Shortage Qty", "Excess Qty", "Status", "Remarks"
     ];
     
     return [...baseHeaders, ...qcHeaders, ...remainingHeaders];
@@ -202,7 +353,7 @@ class GRNExporter {
     
     const remainingRow = [
       row["Shortage Qty"] || "", row["Excess Qty"] || "",
-      row["Status"], row["GRN Date"], row["Remarks"]
+      row["Status"], this.today.toLocaleDateString("en-GB"), row["Remarks"]
     ];
     
     return [...baseRow, ...qcRow, ...remainingRow];
@@ -230,19 +381,24 @@ class GRNExporter {
   buildHTMLContent(summaryStats) {
     return `
       <!DOCTYPE html>
-      <html>
+      <html lang="en">
       <head>
         <meta charset="UTF-8">
-        <title>GRN - ${this.documentNumber}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Goods Received Note - ${this.documentNumber}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
         <style>
           ${this.getHTMLStyles()}
         </style>
       </head>
       <body>
-        ${this.buildHTMLHeader()}
-        ${this.buildHTMLSummary(summaryStats)}
-        ${this.buildHTMLTable()}
-        ${this.buildHTMLFooter()}
+        <div class="page">
+          ${this.buildHTMLHeader(summaryStats)}
+          ${this.buildHTMLMainGrid(summaryStats)}
+          ${this.buildHTMLExportActions()}
+          ${this.buildHTMLTable()}
+          ${this.buildHTMLFooter()}
+        </div>
         <script>
           ${this.getHTMLScripts()}
         </script>
@@ -255,20 +411,26 @@ class GRNExporter {
     return `
       :root {
         --primary: #2563eb;
-        --primary-dark: #1d4ed8;
-        --gray-50: #f9fafb;
-        --gray-100: #f3f4f6;
-        --gray-200: #e5e7eb;
-        --gray-300: #d1d5db;
-        --gray-400: #9ca3af;
-        --gray-500: #6b7280;
-        --gray-600: #4b5563;
-        --gray-700: #374151;
-        --gray-800: #1f2937;
-        --gray-900: #111827;
+        --primary-light: #dbeafe;
+        --primary-dark: #1e40af;
+        --success: #059669;
+        --success-light: #d1fae5;
+        --warning: #d97706;
+        --warning-light: #fef3c7;
         --danger: #dc2626;
-        --success: #16a34a;
-        --warning: #ca8a04;
+        --danger-light: #fee2e2;
+        --partial: #7c3aed;
+        --partial-light: #ede9fe;
+        --gray-50: #f8fafc;
+        --gray-100: #f1f5f9;
+        --gray-200: #e2e8f0;
+        --gray-300: #cbd5e1;
+        --gray-400: #94a3b8;
+        --gray-500: #64748b;
+        --gray-600: #475569;
+        --gray-700: #334155;
+        --gray-800: #1e293b;
+        --gray-900: #0f172a;
       }
 
       * {
@@ -278,103 +440,298 @@ class GRNExporter {
       }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        line-height: 1.6;
+        font-family: 'Roboto', sans-serif;
+        line-height: 1.5;
         color: var(--gray-800);
         background: var(--gray-50);
+        margin: 0;
+        padding: 0;
       }
 
       .page {
-        max-width: 1200px;
-        margin: 2rem auto;
+        padding: 2rem;
+        max-width: 1600px;
+        margin: 0 auto;
         background: white;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        overflow: hidden;
+        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        border-radius: 8px;
       }
 
       .header {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        color: white;
-        padding: 2rem;
-        text-align: center;
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--primary-light);
+        background: linear-gradient(to right, var(--primary-light), transparent);
+        padding: 1.5rem;
+        border-radius: 8px;
       }
 
       .header h1 {
-        font-size: 2.5rem;
+        font-size: 28px;
         font-weight: 700;
+        color: var(--primary-dark);
         margin-bottom: 0.5rem;
       }
 
-      .header .subtitle {
-        font-size: 1.1rem;
-        opacity: 0.9;
-        margin-bottom: 1rem;
+      .header .doc-no {
+        font-size: 16px;
+        color: var(--gray-600);
+        font-weight: 500;
       }
 
-      .header-info {
+      .header .doc-date {
+        font-size: 14px;
+        color: var(--gray-500);
+        margin-top: 0.25rem;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-top: 0.5rem;
+      }
+
+      .status-complete { 
+        background: var(--success-light); 
+        color: var(--success);
+        border: 1px solid var(--success);
+      }
+      
+      .status-partial { 
+        background: var(--partial-light); 
+        color: var(--partial);
+        border: 1px solid var(--partial);
+      }
+      
+      .status-discrepancy { 
+        background: var(--danger-light); 
+        color: var(--danger);
+        border: 1px solid var(--danger);
+      }
+
+      .status-qc-failed-receipt {
+        background: var(--danger-light);
+        color: var(--danger);
+        border: 1px solid var(--danger);
+      }
+
+      .status-passed {
+        background: var(--success-light);
+        color: var(--success);
+        border: 1px solid var(--success);
+      }
+
+      .status-failed {
+        background: var(--danger-light);
+        color: var(--danger);
+        border: 1px solid var(--danger);
+      }
+
+      .status-receipt-with-unordered-items {
+        background: var(--warning-light);
+        color: var(--warning);
+        border: 1px solid var(--warning);
+      }
+
+      .status-shortage {
+        background: var(--warning-light);
+        color: var(--warning);
+        border: 1px solid var(--warning);
+      }
+
+      .status-excess {
+        background: var(--success-light);
+        color: var(--success);
+        border: 1px solid var(--success);
+      }
+
+      .status-not-ordered {
+        background: var(--gray-100);
+        color: var(--gray-600);
+        border: 1px solid var(--gray-300);
+      }
+
+      .status-not-received {
+        background: var(--gray-100);
+        color: var(--gray-600);
+        border: 1px solid var(--gray-300);
+      }
+
+      .main-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin-top: 1.5rem;
+        grid-template-columns: 1fr 2fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
       }
 
-      .info-item {
-        background: rgba(255, 255, 255, 0.1);
-        padding: 1rem;
+      .info-sections {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+
+      .info-section {
+        background: var(--gray-50);
+        padding: 1.25rem;
         border-radius: 8px;
-        backdrop-filter: blur(10px);
+        border: 1px solid var(--gray-200);
+        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      }
+
+      .info-section h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--primary-dark);
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--primary-light);
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.75rem;
+        font-size: 14px;
       }
 
       .info-label {
-        font-size: 0.875rem;
-        opacity: 0.8;
-        margin-bottom: 0.25rem;
+        color: var(--gray-600);
+        font-weight: 500;
       }
 
       .info-value {
-        font-size: 1.125rem;
+        color: var(--gray-900);
         font-weight: 600;
-      }
-
-      .content {
-        padding: 2rem;
       }
 
       .summary-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 2rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.75rem;
       }
 
       .summary-card {
         background: white;
+        padding: 1rem;
+        border-radius: 8px;
         border: 1px solid var(--gray-200);
-        border-radius: 12px;
-        padding: 1.5rem;
         text-align: center;
-        transition: all 0.3s ease;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+        transition: all 0.2s ease;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
       }
 
       .summary-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08);
       }
 
       .summary-value {
-        font-size: 2rem;
+        font-size: 24px;
         font-weight: 700;
-        color: var(--primary);
-        margin-bottom: 0.5rem;
-        line-height: 1;
+        margin-bottom: 0.25rem;
+        color: var(--primary-dark);
       }
 
       .summary-label {
-        font-size: 0.875rem;
+        font-size: 14px;
         color: var(--gray-600);
-        font-weight: 500;
+        margin-bottom: 0.1rem;
+      }
+
+      .summary-subtext {
+        font-size: 12px;
+        color: var(--gray-500);
+        line-height: 1.4;
+      }
+
+      .summary-subtext strong {
+        color: var(--gray-700);
+      }
+
+      .table-container {
+        margin: 2rem 0;
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        font-weight: 600;
+        text-align: left;
+        padding: 1rem;
+        border-bottom: 2px solid var(--primary);
+        white-space: nowrap;
+      }
+
+      td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--gray-200);
+        color: var(--gray-700);
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      tr:hover td {
+        background: var(--gray-50);
+      }
+
+      .sku-cell {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        color: var(--gray-800);
+      }
+
+      .qty-cell {
+        text-align: right;
+        font-weight: 600;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      .qc-failed {
+        color: var(--danger);
+      }
+
+      .shortage {
+        color: var(--warning);
+      }
+
+      .excess {
+        color: var(--success);
+      }
+
+      .footer {
+        margin-top: 2rem;
+        text-align: center;
+        padding-top: 1rem;
+        border-top: 1px solid var(--primary-light);
+      }
+
+      .footer-text {
+        font-size: 12px;
+        color: var(--gray-500);
       }
 
       .export-actions {
@@ -430,119 +787,6 @@ class GRNExporter {
         font-weight: 500;
       }
 
-      .table-container {
-        background: white;
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        margin-top: 1.5rem;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.875rem;
-      }
-
-      th {
-        background: var(--gray-50);
-        padding: 1rem 0.75rem;
-        text-align: left;
-        font-weight: 600;
-        color: var(--gray-700);
-        border-bottom: 2px solid var(--gray-200);
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      td {
-        padding: 0.875rem 0.75rem;
-        border-bottom: 1px solid var(--gray-100);
-        vertical-align: middle;
-      }
-
-      tr:hover td {
-        background: var(--gray-50);
-      }
-
-      .sku-cell {
-        font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
-        font-size: 0.75rem;
-        color: var(--gray-600);
-      }
-
-      .qty-cell {
-        text-align: center;
-        font-weight: 600;
-        font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
-      }
-
-      .shortage {
-        color: var(--danger);
-      }
-
-      .excess {
-        color: var(--warning);
-      }
-
-      .qc-failed {
-        color: var(--danger);
-      }
-
-      .status-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .status-complete {
-        background: #d4edda;
-        color: #155724;
-      }
-
-      .status-shortage {
-        background: #fef2f2;
-        color: #721c24;
-      }
-
-      .status-excess {
-        background: #fefce8;
-        color: #856404;
-      }
-
-      .status-not-ordered {
-        background: #d1ecf1;
-        color: #0c5460;
-      }
-
-      .status-not-received {
-        background: #f8fafc;
-        color: #334155;
-      }
-
-      .status-qc-failed-receipt {
-        background: #fef2f2;
-        color: #721c24;
-      }
-
-      .footer {
-        background: var(--gray-50);
-        padding: 2rem;
-        text-align: center;
-        border-top: 1px solid var(--gray-200);
-      }
-
-      .footer-text {
-        color: var(--gray-600);
-        font-size: 0.875rem;
-      }
-
       @media print {
         body {
           background: white;
@@ -568,151 +812,219 @@ class GRNExporter {
           box-shadow: none;
         }
       }
+
+      @media (max-width: 1200px) {
+        .main-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .summary-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      @media (max-width: 768px) {
+        .page {
+          padding: 1rem;
+        }
+
+        .header {
+          grid-template-columns: 1fr;
+          text-align: center;
+        }
+
+        .summary-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .table-container {
+          margin: 1rem -1rem;
+          border-radius: 0;
+          border-left: none;
+          border-right: none;
+        }
+
+        th, td {
+          padding: 0.75rem;
+        }
+      }
     `;
   }
 
-  buildHTMLHeader() {
+  buildHTMLHeader(summaryStats) {
+    const statusClass = this.getStatusClass(summaryStats.overallStatus);
+    const statusText = this.getStatusText(summaryStats.overallStatus);
+    
+    return `
+      <div class="header">
+        <div class="header-main">
+          <h1>Goods Received Note</h1>
+          <div class="doc-no">${this.documentNumber}</div>
+          <div class="doc-date">Generated on ${this.getCurrentDateTime()}</div>
+        </div>
+        <div class="header-side">
+          <div class="status-badge ${statusClass}">${statusText}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  buildHTMLMainGrid(summaryStats) {
     const qcSection = this.grnHeaderInfo.qcPerformed ? `
-          <div class="info-item">
-            <div class="info-label">QC Done By</div>
-            <div class="info-value">${Array.isArray(this.grnHeaderInfo.qcDoneBy) ? this.grnHeaderInfo.qcDoneBy.join(", ") : this.grnHeaderInfo.qcDoneBy}</div>
-          </div>
+      <div class="info-section">
+        <h3>Quality Control</h3>
+        <div class="info-row">
+          <span class="info-label">QC Done By:</span>
+          <span class="info-value">${Array.isArray(this.grnHeaderInfo.qcDoneBy) ? this.grnHeaderInfo.qcDoneBy.join(", ") : this.grnHeaderInfo.qcDoneBy}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Verified By:</span>
+          <span class="info-value">${this.grnHeaderInfo.verifiedBy}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">QC Pass Rate:</span>
+          <span class="info-value">${summaryStats.qcPassRate}%</span>
+        </div>
+      </div>
     ` : `
-          <div class="info-item">
-            <div class="info-label">QC Status</div>
-            <div class="info-value">Not Performed</div>
-          </div>
+      <div class="info-section">
+        <h3>Quality Control</h3>
+        <div class="info-row">
+          <span class="info-label">QC Status:</span>
+          <span class="info-value">Not Performed</span>
+        </div>
+      </div>
     `;
 
     return `
-      <div class="header">
-        <h1>Goods Received Note</h1>
-        <div class="subtitle">${this.documentNumber}</div>
-        <div class="header-info">
-          <div class="info-item">
-            <div class="info-label">PO Number</div>
-            <div class="info-value">${this.grnHeaderInfo.poNumber}</div>
+      <div class="main-grid">
+        <div class="info-sections">
+          <div class="info-section">
+            <h3>Order Information</h3>
+            <div class="info-row">
+              <span class="info-label">Purchase Order No:</span>
+              <span class="info-value">${this.grnHeaderInfo.poNumber}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Vendor Name:</span>
+              <span class="info-value">${this.grnHeaderInfo.brandName}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Replenishment No:</span>
+              <span class="info-value">${this.grnHeaderInfo.replenishmentNumber}</span>
+            </div>
           </div>
-          <div class="info-item">
-            <div class="info-label">Vendor</div>
-            <div class="info-value">${this.grnHeaderInfo.brandName}</div>
+
+          <div class="info-section">
+            <h3>Receipt Information</h3>
+            <div class="info-row">
+              <span class="info-label">Inward Date:</span>
+              <span class="info-value">${this.grnHeaderInfo.inwardDate}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Receiving Warehouse:</span>
+              <span class="info-value">${this.grnHeaderInfo.warehouseNo}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Receipt Accuracy:</span>
+              <span class="info-value">${summaryStats.receiptAccuracy}%</span>
+            </div>
           </div>
-          <div class="info-item">
-            <div class="info-label">Replenishment</div>
-            <div class="info-value">${this.grnHeaderInfo.replenishmentNumber}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Inward Date</div>
-            <div class="info-value">${this.grnHeaderInfo.inwardDate}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Warehouse</div>
-            <div class="info-value">${this.grnHeaderInfo.warehouseNo}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Warehouse Manager</div>
-            <div class="info-value">${this.grnHeaderInfo.warehouseManagerName}</div>
-          </div>
+
           ${qcSection}
-          <div class="info-item">
-            <div class="info-label">Verified By</div>
-            <div class="info-value">${this.grnHeaderInfo.verifiedBy}</div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.totalItems}</div>
+            <div class="summary-label">Total Items</div>
+            <div class="summary-subtext">
+              <strong>${this.calculatePercentage(summaryStats.totalItems - summaryStats.itemsWithIssues, summaryStats.totalItems)}%</strong> Complete<br>
+              <strong>${this.calculatePercentage(summaryStats.itemsWithIssues, summaryStats.totalItems)}%</strong> With Issues
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.totalOrderedUnits}</div>
+            <div class="summary-label">Total Ordered Units</div>
+            <div class="summary-subtext">
+              <strong>${summaryStats.totalReceivedUnits}</strong> Received<br>
+              <strong>${summaryStats.receiptAccuracy}%</strong> Accuracy
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.totalReceivedUnits}</div>
+            <div class="summary-label">Received Units</div>
+            <div class="summary-subtext">
+              ${this.grnHeaderInfo.qcPerformed ? `
+                <strong>${summaryStats.totalQcPassedUnits}</strong> QC Pass<br>
+                <strong>${summaryStats.totalQcFailedUnits}</strong> QC Fail<br>
+              ` : ''}
+              <strong>${summaryStats.totalNotOrderedUnits}</strong> Not Ordered
+            </div>
+          </div>
+          ${this.grnHeaderInfo.qcPerformed ? `
+            <div class="summary-card">
+              <div class="summary-value">${summaryStats.totalQcPassedUnits}</div>
+              <div class="summary-label">QC Passed Units</div>
+              <div class="summary-subtext">
+                <strong>${summaryStats.qcPassedAgainstPO}</strong> Against PO<br>
+                <strong>${summaryStats.qcPassedNotOrdered}</strong> Not Ordered
+              </div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-value">${summaryStats.totalQcFailedUnits}</div>
+              <div class="summary-label">QC Failed Units</div>
+              <div class="summary-subtext">
+                <strong>${summaryStats.totalQcFailedUnits}</strong> Units<br>
+                <strong>${summaryStats.qcPassRate}%</strong> Pass Rate
+              </div>
+            </div>
+          ` : ''}
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.totalShortageUnits}</div>
+            <div class="summary-label">Total Shortage Units</div>
+            <div class="summary-subtext">
+              Across <strong>${this.countByStatus("Shortage")}</strong> Items<br>
+              Avg. <strong>${this.calculatePercentage(summaryStats.totalShortageUnits, this.countByStatus("Shortage"))}</strong> Units/Item
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.totalExcessUnits}</div>
+            <div class="summary-label">Total Excess Units</div>
+            <div class="summary-subtext">
+              Across <strong>${this.countByStatus("Excess")}</strong> Items<br>
+              Avg. <strong>${this.calculatePercentage(summaryStats.totalExcessUnits, this.countByStatus("Excess"))}</strong> Units/Item
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.totalNotOrderedUnits}</div>
+            <div class="summary-label">Not Ordered Units</div>
+            <div class="summary-subtext">
+              <strong>${this.countByStatus("Excess Receipt")}</strong> Units<br>
+              Across <strong>${this.countByStatus("Excess Receipt")}</strong> Items
+            </div>
           </div>
         </div>
       </div>
     `;
   }
 
-  buildHTMLSummary(summaryStats) {
-    const qcCards = this.grnHeaderInfo.qcPerformed ? `
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.quantities.totalPassedQC}</div>
-            <div class="summary-label">QC Passed</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.quantities.totalFailedQC}</div>
-            <div class="summary-label">QC Failed</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.percentages.qcPassRate}%</div>
-            <div class="summary-label">QC Pass Rate</div>
-          </div>
-    ` : `
-          <div class="summary-card">
-            <div class="summary-value">-</div>
-            <div class="summary-label">QC Status</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">Not Performed</div>
-            <div class="summary-label">QC</div>
-          </div>
-    `;
-
+  buildHTMLExportActions() {
     return `
-      <div class="content">
-        <div class="summary-grid">
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.items.total}</div>
-            <div class="summary-label">Total Items</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.quantities.totalOrdered}</div>
-            <div class="summary-label">Ordered Units</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.quantities.totalReceived}</div>
-            <div class="summary-label">Received Units</div>
-          </div>
-          ${qcCards}
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.quantities.totalShortage}</div>
-            <div class="summary-label">Shortage</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.quantities.totalExcess}</div>
-            <div class="summary-label">Excess</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.quantities.totalNotOrderedUnits}</div>
-            <div class="summary-label">Not Ordered</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.percentages.receiptAccuracy}%</div>
-            <div class="summary-label">Receipt Accuracy</div>
-          </div>
-        </div>
-
-        <div class="export-actions">
-          <button type="button" class="export-btn csv-btn" onclick="downloadCsvFromData()">
-            <span class="btn-icon">📊</span>
-            <span class="btn-text">Download CSV</span>
-          </button>
-          <button type="button" class="export-btn pdf-btn" onclick="downloadPdfFromData()">
-            <span class="btn-icon">📄</span>
-            <span class="btn-text">Download PDF</span>
-          </button>
-        </div>
+      <div class="export-actions">
+        <button type="button" class="export-btn csv-btn" onclick="downloadCsvFromData()">
+          <span class="btn-icon">📊</span>
+          <span class="btn-text">Download CSV</span>
+        </button>
+        <button type="button" class="export-btn pdf-btn" onclick="downloadPdfFromData()">
+          <span class="btn-icon">📄</span>
+          <span class="btn-text">Download PDF</span>
+        </button>
       </div>
     `;
   }
 
   buildHTMLTable() {
-    const qcHeaders = this.grnHeaderInfo.qcPerformed ? `
-              <th>Passed QC</th>
-              <th>Failed QC</th>
-              <th>QC Status</th>
-    ` : '';
-
-    const qcCells = this.grnHeaderInfo.qcPerformed ? `
-        <td class="qty-cell">${row["Passed QC Qty"] || "-"}</td>
-        <td class="qty-cell qc-failed">${row["Failed QC Qty"] || "-"}</td>
-        <td>
-          <span class="status-badge status-${row["QC Status"].toLowerCase().replace(/\s+/g, "-")}">
-            ${row["QC Status"]}
-          </span>
-        </td>
-    ` : '';
-
     return `
       <div class="table-container">
         <table>
@@ -725,83 +1037,366 @@ class GRNExporter {
               <th>Color</th>
               <th>Ordered</th>
               <th>Received</th>
-              ${qcHeaders}
+              ${this.grnHeaderInfo.qcPerformed ? `
+                <th>Passed QC</th>
+                <th>Failed QC</th>
+              ` : ''}
               <th>Shortage</th>
               <th>Excess</th>
+              ${this.grnHeaderInfo.qcPerformed ? `
+                <th>QC Status</th>
+              ` : ''}
               <th>Status</th>
               <th>Remarks</th>
             </tr>
           </thead>
           <tbody>
-            ${this.grnData.map(row => this.formatHTMLRow(row)).join("")}
+            ${this.grnData.map((item, index) => this.buildTableRow(item, index + 1)).join('')}
           </tbody>
         </table>
       </div>
     `;
   }
 
-  formatHTMLRow(row) {
-    const qcCells = this.grnHeaderInfo.qcPerformed ? `
-        <td class="qty-cell">${row["Passed QC Qty"] || "-"}</td>
-        <td class="qty-cell qc-failed">${row["Failed QC Qty"] || "-"}</td>
-        <td>
-          <span class="status-badge status-${row["QC Status"].toLowerCase().replace(/\s+/g, "-")}">
-            ${row["QC Status"]}
-          </span>
-        </td>
-    ` : '';
-
+  buildTableRow(item, serialNo) {
+    const qcStatusClass = this.getQCStatusClass(item);
+    const qcStatusText = this.getQCStatusText(item);
+    const statusClass = this.getStatusClass(item.Status);
+    const statusText = this.getStatusText(item.Status);
+    
     return `
       <tr>
-        <td>${row["S.No"]}</td>
-        <td class="sku-cell">${row["Brand SKU"]}</td>
-        <td class="sku-cell">${row["KNOT SKU"]}</td>
-        <td>${row["Size"]}</td>
-        <td>${row["Color"]}</td>
-        <td class="qty-cell">${row["Ordered Qty"]}</td>
-        <td class="qty-cell">${row["Received Qty"]}</td>
-        ${qcCells}
-        <td class="qty-cell shortage">${row["Shortage Qty"] || "-"}</td>
-        <td class="qty-cell excess">${row["Excess Qty"] || "-"}</td>
+        <td>${serialNo}</td>
+        <td class="sku-cell">${item["Brand SKU"] || '-'}</td>
+        <td class="sku-cell">${item["KNOT SKU"] || '-'}</td>
+        <td>${item["Size"] || '-'}</td>
+        <td>${item["Color"] || '0'}</td>
+        <td class="qty-cell">${item["Ordered Qty"] || 0}</td>
+        <td class="qty-cell">${item["Received Qty"] || 0}</td>
+        ${this.grnHeaderInfo.qcPerformed ? `
+          <td class="qty-cell">${item["Passed QC Qty"] || '-'}</td>
+          <td class="qty-cell qc-failed">${item["Failed QC Qty"] || '-'}</td>
+        ` : ''}
+        <td class="qty-cell shortage">${item["Shortage Qty"] || '-'}</td>
+        <td class="qty-cell excess">${item["Excess Qty"] || '-'}</td>
+        ${this.grnHeaderInfo.qcPerformed ? `
+          <td>
+            <span class="status-badge ${qcStatusClass}">
+              ${qcStatusText}
+            </span>
+          </td>
+        ` : ''}
         <td>
-          <span class="status-badge status-${row.Status.toLowerCase().replace(/\s+/g, "-")}">
-            ${row.Status}
+          <span class="status-badge ${statusClass}">
+            ${statusText}
           </span>
         </td>
-        <td style="font-size: 12px; max-width: 250px;">${row.Remarks}</td>
+        <td style="font-size: 12px; max-width: 250px;">${this.generateRemarks(item)}</td>
       </tr>
     `;
   }
 
+  getQCStatusClass(item) {
+    if (!this.grnHeaderInfo.qcPerformed) return 'status-passed';
+    if ((item["Failed QC Qty"] || 0) > 0) return 'status-failed';
+    if ((item["Passed QC Qty"] || 0) > 0) return 'status-passed';
+    return 'status-passed';
+  }
+
+  getQCStatusText(item) {
+    if (!this.grnHeaderInfo.qcPerformed) return 'Not Performed';
+    if ((item["Failed QC Qty"] || 0) > 0) return 'Failed';
+    if ((item["Passed QC Qty"] || 0) > 0) return 'Passed';
+    return 'Not Performed';
+  }
+
+  generateRemarks(item) {
+    const remarks = [];
+    
+    // Check for shortage - either by quantity or status
+    if ((item["Shortage Qty"] || 0) > 0 || item.Status === "Shortage" || item.Status === "Shortage & QC Failed") {
+      const shortageQty = item["Shortage Qty"] || 0;
+      if (shortageQty > 0) {
+        remarks.push("Short by " + shortageQty + " units");
+      } else {
+        remarks.push("Shortage detected");
+      }
+    }
+    
+    // Check for excess - either by quantity or status
+    if ((item["Excess Qty"] || 0) > 0 || item.Status === "Excess" || item.Status === "Excess & QC Failed" || item.Status === "Excess Receipt") {
+      const excessQty = item["Excess Qty"] || 0;
+      if (excessQty > 0) {
+        remarks.push("Excess by " + excessQty + " units");
+      } else {
+        remarks.push("Excess detected");
+      }
+    }
+    
+    // Check for not ordered items
+    if ((item["Not Ordered Qty"] || 0) > 0 || item.Status === "Not Ordered") {
+      const notOrderedQty = item["Not Ordered Qty"] || 0;
+      if (notOrderedQty > 0) {
+        remarks.push(notOrderedQty + " units not ordered");
+      } else {
+        remarks.push("Items not in purchase order");
+      }
+    }
+    
+    // Check for not received items
+    if (item.Status === "Not Received") {
+      remarks.push("Items not received");
+    }
+    
+    // Check for QC issues
+    if (this.grnHeaderInfo.qcPerformed) {
+      const qcRemarks = [];
+      if ((item["Passed QC Qty"] || 0) > 0) {
+        qcRemarks.push(item["Passed QC Qty"] + " passed");
+      }
+      if ((item["Failed QC Qty"] || 0) > 0) {
+        qcRemarks.push(item["Failed QC Qty"] + " failed");
+      }
+      if (qcRemarks.length > 0) {
+        remarks.push("QC: " + ((item["Failed QC Qty"] || 0) > 0 ? "Failed" : "Passed") + " (" + qcRemarks.join(", ") + ")");
+      }
+    }
+    
+    // Only show "All items received as ordered" if there are no issues
+    if (remarks.length === 0) {
+      remarks.push("All items received as ordered");
+    }
+    
+    return remarks.join(" | ");
+  }
+
   buildHTMLFooter() {
     return `
-      <div class="footer">
-        <p class="footer-text">
-          <strong>KNOT Inventory Management System</strong><br>
-          This is a computer-generated document. For queries, contact the warehouse team.
-        </p>
-      </div>
+    <div class="footer">
+      <p class="footer-text">
+        <strong>KNOT Inventory Management System</strong><br>
+        This is a computer-generated document. For queries, contact the warehouse team.
+      </p>
+    </div>
     `;
   }
 
   getHTMLScripts() {
     return `
       // Store data for download functions
-      const grnDataForDownload = ${JSON.stringify(this.grnData)};
-      const grnHeaderInfoForDownload = ${JSON.stringify(this.grnHeaderInfo)};
+      const grnData = ${JSON.stringify(this.grnData)};
+      const grnHeaderInfo = ${JSON.stringify(this.grnHeaderInfo)};
+      const documentNumber = "${this.documentNumber}";
+
+      // Helper functions for CSV generation
+      function escapeCSV(value) {
+        if (value === null || value === undefined) return '';
+        const stringValue = String(value);
+        if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\\n')) {
+          return '"' + stringValue.replace(/"/g, '""') + '"';
+        }
+        return stringValue;
+      }
+
+      function convertToCSV(data) {
+        return data.map(row => 
+          row.map(cell => escapeCSV(cell)).join(',')
+        ).join('\\n');
+      }
+
+      function generateCSV() {
+        const today = new Date();
+        
+        // Calculate summary statistics manually
+        const summaryStats = {
+          totalOrderedUnits: grnData.reduce((sum, item) => sum + (item["Ordered Qty"] || 0), 0),
+          totalReceivedUnits: grnData.reduce((sum, item) => sum + (item["Received Qty"] || 0), 0),
+          totalShortageUnits: grnData.reduce((sum, item) => sum + (item["Shortage Qty"] || 0), 0),
+          totalExcessUnits: grnData.reduce((sum, item) => sum + (item["Excess Qty"] || 0), 0),
+          totalNotOrderedUnits: grnData.reduce((sum, item) => sum + (item["Not Ordered Qty"] || 0), 0),
+          totalQcPassedUnits: grnData.reduce((sum, item) => sum + (item["Passed QC Qty"] || 0), 0),
+          totalQcFailedUnits: grnData.reduce((sum, item) => sum + (item["Failed QC Qty"] || 0), 0)
+        };
+        
+        summaryStats.receiptAccuracy = summaryStats.totalOrderedUnits > 0 ? 
+          Math.round(((summaryStats.totalOrderedUnits - summaryStats.totalShortageUnits) / summaryStats.totalOrderedUnits) * 100) : 0;
+        
+        summaryStats.qcPassRate = (summaryStats.totalQcPassedUnits + summaryStats.totalQcFailedUnits) > 0 ? 
+          Math.round((summaryStats.totalQcPassedUnits / (summaryStats.totalQcPassedUnits + summaryStats.totalQcFailedUnits)) * 100) : 0;
+        
+        // Create metadata section
+        const metadata = [
+          ["Goods Received Note (GRN)"],
+          ["Document Number", documentNumber],
+          ["Generated Date", today.toLocaleDateString("en-GB")],
+          ["Generated Time", today.toLocaleTimeString()],
+          [], // Empty row for spacing
+          ["Order Information"],
+          ["PO Number", grnHeaderInfo.poNumber],
+          ["Vendor/Brand", grnHeaderInfo.brandName],
+          ["Replenishment Number", grnHeaderInfo.replenishmentNumber],
+          [], // Empty row for spacing
+          ["Receipt Information"],
+          ["Inward Date", grnHeaderInfo.inwardDate],
+          ["Warehouse", grnHeaderInfo.warehouseNo],
+          ["Receipt Accuracy", summaryStats.receiptAccuracy + "%"],
+          [], // Empty row for spacing
+          ["Summary Statistics"],
+          ["Total Ordered Units", summaryStats.totalOrderedUnits],
+          ["Total Received Units", summaryStats.totalReceivedUnits],
+          ["Total Shortage Units", summaryStats.totalShortageUnits],
+          ["Total Excess Units", summaryStats.totalExcessUnits],
+          ["Total Not Ordered Units", summaryStats.totalNotOrderedUnits]
+        ];
+        
+        // Add QC statistics if QC was performed
+        if (grnHeaderInfo.qcPerformed) {
+          metadata.push(
+            ["Total QC Passed Units", summaryStats.totalQcPassedUnits],
+            ["Total QC Failed Units", summaryStats.totalQcFailedUnits],
+            ["QC Pass Rate", summaryStats.qcPassRate + "%"]
+          );
+        }
+        
+        metadata.push([], []); // Add two empty rows before data
+        
+        // Define headers based on QC status
+        const headers = [
+          "S.No", "Brand SKU", "KNOT SKU", "Size", "Color", 
+          "Ordered Qty", "Received Qty"
+        ];
+        
+        if (grnHeaderInfo.qcPerformed) {
+          headers.push("Passed QC Qty", "Failed QC Qty");
+        }
+        
+        headers.push("Shortage Qty", "Excess Qty");
+        
+        if (grnHeaderInfo.qcPerformed) {
+          headers.push("QC Status");
+        }
+        
+        headers.push("Status", "Remarks");
+
+        // Helper function to generate remarks
+        function generateRemarks(item) {
+          const remarks = [];
+          
+          // Check for shortage - either by quantity or status
+          if ((item["Shortage Qty"] || 0) > 0 || item.Status === "Shortage" || item.Status === "Shortage & QC Failed") {
+            const shortageQty = item["Shortage Qty"] || 0;
+            if (shortageQty > 0) {
+              remarks.push("Short by " + shortageQty + " units");
+            } else {
+              remarks.push("Shortage detected");
+            }
+          }
+          
+          // Check for excess - either by quantity or status
+          if ((item["Excess Qty"] || 0) > 0 || item.Status === "Excess" || item.Status === "Excess & QC Failed" || item.Status === "Excess Receipt") {
+            const excessQty = item["Excess Qty"] || 0;
+            if (excessQty > 0) {
+              remarks.push("Excess by " + excessQty + " units");
+            } else {
+              remarks.push("Excess detected");
+            }
+          }
+          
+          // Check for not ordered items
+          if ((item["Not Ordered Qty"] || 0) > 0 || item.Status === "Not Ordered") {
+            const notOrderedQty = item["Not Ordered Qty"] || 0;
+            if (notOrderedQty > 0) {
+              remarks.push(notOrderedQty + " units not ordered");
+            } else {
+              remarks.push("Items not in purchase order");
+            }
+          }
+          
+          // Check for not received items
+          if (item.Status === "Not Received") {
+            remarks.push("Items not received");
+          }
+          
+          // Check for QC issues
+          if (grnHeaderInfo.qcPerformed) {
+            const qcRemarks = [];
+            if ((item["Passed QC Qty"] || 0) > 0) {
+              qcRemarks.push(item["Passed QC Qty"] + " passed");
+            }
+            if ((item["Failed QC Qty"] || 0) > 0) {
+              qcRemarks.push(item["Failed QC Qty"] + " failed");
+            }
+            if (qcRemarks.length > 0) {
+              remarks.push("QC: " + ((item["Failed QC Qty"] || 0) > 0 ? "Failed" : "Passed") + " (" + qcRemarks.join(", ") + ")");
+            }
+          }
+          
+          // Only show "All items received as ordered" if there are no issues
+          if (remarks.length === 0) {
+            remarks.push("All items received as ordered");
+          }
+          
+          return remarks.join(" | ");
+        }
+
+        const dataRows = grnData.map((item, index) => {
+          const row = [
+            index + 1,
+            item["Brand SKU"] || "",
+            item["KNOT SKU"] || "",
+            item["Size"] || "",
+            item["Color"] || "",
+            item["Ordered Qty"] || 0,
+            item["Received Qty"] || 0
+          ];
+          
+          if (grnHeaderInfo.qcPerformed) {
+            row.push(
+              item["Passed QC Qty"] || 0,
+              item["Failed QC Qty"] || 0
+            );
+          }
+          
+          row.push(
+            item["Shortage Qty"] || 0,
+            item["Excess Qty"] || 0
+          );
+          
+          if (grnHeaderInfo.qcPerformed) {
+            row.push(item["QC Status"] || "");
+          }
+          
+          row.push(
+            item.Status || "",
+            generateRemarks(item)
+          );
+          
+          return row;
+        });
+
+        // Combine metadata, headers, and data rows
+        const csvData = [
+          ...metadata,
+          headers,
+          ...dataRows
+        ];
+
+        return convertToCSV(csvData);
+      }
 
       function downloadCsvFromData() {
         try {
-          const exporter = new GRNExporter(grnDataForDownload, grnHeaderInfoForDownload);
-          const csvContent = exporter.generateCSV();
-          const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+          const csvContent = generateCSV();
+          
+          // Create and trigger download
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = exporter.documentNumber + ".csv";
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = documentNumber + '.csv';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
           URL.revokeObjectURL(url);
         } catch (error) {
           console.error("Error downloading CSV:", error);
@@ -811,14 +1406,218 @@ class GRNExporter {
 
       function downloadPdfFromData() {
         try {
-          const exporter = new GRNExporter(grnDataForDownload, grnHeaderInfoForDownload);
-          const pdfContent = exporter.generatePDF();
-          const pdfWindow = window.open("", "_blank");
-          pdfWindow.document.write(pdfContent);
-          pdfWindow.document.close();
-          pdfWindow.onload = function() {
-            pdfWindow.print();
+          // Create a new window for printing
+          const printWindow = window.open('', '_blank');
+          
+          const today = new Date();
+          const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+          const grnDocNo = "GRN-KNOT-" + dateStr + "-" + grnHeaderInfo.brandName.replace(/\s+/g, "") + "-" + grnHeaderInfo.replenishmentNumber;
+
+          // Calculate summary statistics manually
+          const summaryStats = {
+            totalOrderedUnits: grnData.reduce((sum, item) => sum + (item["Ordered Qty"] || 0), 0),
+            totalReceivedUnits: grnData.reduce((sum, item) => sum + (item["Received Qty"] || 0), 0),
+            totalShortageUnits: grnData.reduce((sum, item) => sum + (item["Shortage Qty"] || 0), 0),
+            totalExcessUnits: grnData.reduce((sum, item) => sum + (item["Excess Qty"] || 0), 0),
+            totalNotOrderedUnits: grnData.reduce((sum, item) => sum + (item["Not Ordered Qty"] || 0), 0),
+            totalQcPassedUnits: grnData.reduce((sum, item) => sum + (item["Passed QC Qty"] || 0), 0),
+            totalQcFailedUnits: grnData.reduce((sum, item) => sum + (item["Failed QC Qty"] || 0), 0)
           };
+          
+          summaryStats.receiptAccuracy = summaryStats.totalOrderedUnits > 0 ? 
+            Math.round(((summaryStats.totalOrderedUnits - summaryStats.totalShortageUnits) / summaryStats.totalOrderedUnits) * 100) : 0;
+          
+          summaryStats.qcPassRate = (summaryStats.totalQcPassedUnits + summaryStats.totalQcFailedUnits) > 0 ? 
+            Math.round((summaryStats.totalQcPassedUnits / (summaryStats.totalQcPassedUnits + summaryStats.totalQcFailedUnits)) * 100) : 0;
+
+          // Build QC-related summary cards
+          const qcSummaryCards = grnHeaderInfo.qcPerformed ? 
+            '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+              '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalQcPassedUnits + '</div>' +
+              '<div style="font-size: 10px; color: #666; font-weight: 500;">QC Passed</div>' +
+            '</div>' +
+            '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+              '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalQcFailedUnits + '</div>' +
+              '<div style="font-size: 10px; color: #666; font-weight: 500;">QC Failed</div>' +
+            '</div>' : '';
+
+          const qcPassRateCard = grnHeaderInfo.qcPerformed ? 
+            '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+              '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.qcPassRate + '%</div>' +
+              '<div style="font-size: 10px; color: #666; font-weight: 500;">QC Pass Rate</div>' +
+            '</div>' : '';
+
+          // Build QC-related table headers
+          const qcTableHeaders = grnHeaderInfo.qcPerformed ? 
+            '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Passed QC</th>' +
+            '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Failed QC</th>' : '';
+
+          const qcStatusHeader = grnHeaderInfo.qcPerformed ? 
+            '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">QC Status</th>' : '';
+
+          // Build table rows
+          const tableRows = grnData.map((row, index) => {
+            const qcCells = grnHeaderInfo.qcPerformed ? 
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (row["Passed QC Qty"] || "-") + '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (row["Failed QC Qty"] || "-") + '</td>' : '';
+
+            const qcStatusCell = grnHeaderInfo.qcPerformed ? 
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' +
+                '<span style="padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold; display: inline-block; text-align: center; min-width: 40px; background: ' + 
+                (row["QC Status"] === 'Passed' ? '#d4edda' : row["QC Status"] === 'Failed' ? '#f8d7da' : '#fff3cd') + 
+                '; color: ' + (row["QC Status"] === 'Passed' ? '#155724' : row["QC Status"] === 'Failed' ? '#721c24' : '#856404') + ';">' + 
+                row["QC Status"] + '</span>' +
+              '</td>' : '';
+
+            const statusBgColor = row.Status === 'Complete' ? '#d4edda' : 
+                                 row.Status === 'Shortage' ? '#f8d7da' : 
+                                 row.Status === 'Excess' ? '#fff3cd' : 
+                                 row.Status === 'Not Ordered' ? '#d1ecf1' : 
+                                 row.Status === 'Not Received' ? '#e2e3e5' : '#f8d7da';
+
+            const statusTextColor = row.Status === 'Complete' ? '#155724' : 
+                                   row.Status === 'Shortage' ? '#721c24' : 
+                                   row.Status === 'Excess' ? '#856404' : 
+                                   row.Status === 'Not Ordered' ? '#0c5460' : 
+                                   row.Status === 'Not Received' ? '#383d41' : '#721c24';
+
+            return '<tr>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (index + 1) + '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Brand SKU"] + '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["KNOT SKU"] + '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Size"] + '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Color"] + '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Ordered Qty"] + '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Received Qty"] + '</td>' +
+              qcCells +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (row["Shortage Qty"] || "-") + '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (row["Excess Qty"] || "-") + '</td>' +
+              qcStatusCell +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' +
+                '<span style="padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold; display: inline-block; text-align: center; min-width: 40px; background: ' + statusBgColor + '; color: ' + statusTextColor + ';">' + row.Status + '</span>' +
+              '</td>' +
+            '</tr>';
+          }).join('');
+
+          // Create HTML content for printing
+          const printContent = 
+            '<!DOCTYPE html>' +
+            '<html>' +
+            '<head>' +
+              '<title>Goods Received Note - ' + grnDocNo + '</title>' +
+              '<style>' +
+                '@media print { body { margin: 0; padding: 20px; } }' +
+                'body { font-family: Arial, sans-serif; font-size: 12px; line-height: 1.4; }' +
+                'table { width: 100%; border-collapse: collapse; font-size: 10px; }' +
+                'th, td { border: 1px solid #ddd; padding: 6px 4px; text-align: center; }' +
+                'th { background-color: #f2f2f2; font-weight: bold; }' +
+                '.header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; }' +
+                '.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }' +
+                '.info-card { background: #f8f9fa; padding: 12px; border-radius: 4px; border: 1px solid #e9ecef; }' +
+                '.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }' +
+                '.stat-card { text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6; }' +
+                '.footer { margin-top: 20px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 10px; }' +
+              '</style>' +
+            '</head>' +
+            '<body>' +
+              '<div class="header">' +
+                '<h1 style="margin: 0; color: #2563eb; font-size: 24px; font-weight: bold;">Goods Received Note</h1>' +
+                '<div style="font-size: 14px; color: #666; margin-top: 5px; font-weight: 600;">' + grnDocNo + '</div>' +
+                '<div style="font-size: 12px; color: #888; margin-top: 3px;">Generated on ' + today.toLocaleDateString("en-GB") + ' at ' + today.toLocaleTimeString() + '</div>' +
+              '</div>' +
+
+              '<div class="info-grid">' +
+                '<div class="info-card">' +
+                  '<h3 style="margin: 0 0 8px 0; color: #2563eb; font-size: 14px; font-weight: bold;">Order Information</h3>' +
+                  '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+                    '<span>PO Number:</span><span>' + grnHeaderInfo.poNumber + '</span>' +
+                  '</div>' +
+                  '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+                    '<span>Vendor:</span><span>' + grnHeaderInfo.brandName + '</span>' +
+                  '</div>' +
+                  '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+                    '<span>Replenishment:</span><span>' + grnHeaderInfo.replenishmentNumber + '</span>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="info-card">' +
+                  '<h3 style="margin: 0 0 8px 0; color: #2563eb; font-size: 14px; font-weight: bold;">Receipt Information</h3>' +
+                  '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+                    '<span>Inward Date:</span><span>' + grnHeaderInfo.inwardDate + '</span>' +
+                  '</div>' +
+                  '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+                    '<span>Warehouse:</span><span>' + grnHeaderInfo.warehouseNo + '</span>' +
+                  '</div>' +
+                  '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+                    '<span>Receipt Accuracy:</span><span>' + summaryStats.receiptAccuracy + '%</span>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+
+              '<div class="stats-grid">' +
+                '<div class="stat-card">' +
+                  '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalOrderedUnits + '</div>' +
+                  '<div style="font-size: 10px; color: #666; font-weight: 500;">Ordered Units</div>' +
+                '</div>' +
+                '<div class="stat-card">' +
+                  '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalReceivedUnits + '</div>' +
+                  '<div style="font-size: 10px; color: #666; font-weight: 500;">Received Units</div>' +
+                '</div>' +
+                qcSummaryCards +
+                '<div class="stat-card">' +
+                  '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalShortageUnits + '</div>' +
+                  '<div style="font-size: 10px; color: #666; font-weight: 500;">Shortage</div>' +
+                '</div>' +
+                '<div class="stat-card">' +
+                  '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalExcessUnits + '</div>' +
+                  '<div style="font-size: 10px; color: #666; font-weight: 500;">Excess</div>' +
+                '</div>' +
+                '<div class="stat-card">' +
+                  '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalNotOrderedUnits + '</div>' +
+                  '<div style="font-size: 10px; color: #666; font-weight: 500;">Not Ordered</div>' +
+                '</div>' +
+                qcPassRateCard +
+              '</div>' +
+
+              '<div style="margin-top: 15px; overflow-x: auto;">' +
+                '<table>' +
+                  '<thead>' +
+                    '<tr>' +
+                      '<th>S.No</th>' +
+                      '<th>Brand SKU</th>' +
+                      '<th>KNOT SKU</th>' +
+                      '<th>Size</th>' +
+                      '<th>Color</th>' +
+                      '<th>Ordered</th>' +
+                      '<th>Received</th>' +
+                      (grnHeaderInfo.qcPerformed ? '<th>Passed QC</th><th>Failed QC</th>' : '') +
+                      '<th>Shortage</th>' +
+                      '<th>Excess</th>' +
+                      (grnHeaderInfo.qcPerformed ? '<th>QC Status</th>' : '') +
+                      '<th>Status</th>' +
+                    '</tr>' +
+                  '</thead>' +
+                  '<tbody>' +
+                    tableRows +
+                  '</tbody>' +
+                '</table>' +
+              '</div>' +
+
+              '<div class="footer">' +
+                '<strong>KNOT Inventory Management System</strong><br>' +
+                'This is a computer-generated document. For queries, contact the warehouse team.' +
+              '</div>' +
+            '</body>' +
+            '</html>';
+
+          printWindow.document.write(printContent);
+          printWindow.document.close();
+          
+          // Wait for content to load then print
+          printWindow.onload = function() {
+            printWindow.print();
+            printWindow.close();
+          };
+          
         } catch (error) {
           console.error("Error downloading PDF:", error);
           alert("Error downloading PDF. Please try again.");
@@ -990,21 +1789,6 @@ class GRNExporter {
         line-height: 1.2;
       }
       
-      /* Column widths for better A4 fit */
-      table th:nth-child(1), table td:nth-child(1) { width: 4%; } /* S.No */
-      table th:nth-child(2), table td:nth-child(2) { width: 12%; } /* Brand SKU */
-      table th:nth-child(3), table td:nth-child(3) { width: 12%; } /* KNOT SKU */
-      table th:nth-child(4), table td:nth-child(4) { width: 6%; } /* Size */
-      table th:nth-child(5), table td:nth-child(5) { width: 8%; } /* Color */
-      table th:nth-child(6), table td:nth-child(6) { width: 8%; } /* Ordered */
-      table th:nth-child(7), table td:nth-child(7) { width: 8%; } /* Received */
-      table th:nth-child(8), table td:nth-child(8) { width: 8%; } /* Passed QC */
-      table th:nth-child(9), table td:nth-child(9) { width: 8%; } /* Failed QC */
-      table th:nth-child(10), table td:nth-child(10) { width: 8%; } /* Shortage */
-      table th:nth-child(11), table td:nth-child(11) { width: 8%; } /* Excess */
-      table th:nth-child(12), table td:nth-child(12) { width: 10%; } /* QC Status */
-      table th:nth-child(13), table td:nth-child(13) { width: 10%; } /* Status */
-      
       .status-badge { 
         padding: 2px 4px; 
         border-radius: 3px; 
@@ -1034,7 +1818,6 @@ class GRNExporter {
         padding-top: 10px;
       }
       
-      /* Print optimizations */
       @media print { 
         body { 
           margin: 0; 
@@ -1097,7 +1880,7 @@ class GRNExporter {
           <h3>Receipt Information</h3>
           <div class="info-row"><span>Inward Date:</span><span>${this.grnHeaderInfo.inwardDate}</span></div>
           <div class="info-row"><span>Warehouse:</span><span>${this.grnHeaderInfo.warehouseNo}</span></div>
-          <div class="info-row"><span>Receipt Accuracy:</span><span>${summaryStats.percentages.receiptAccuracy}%</span></div>
+          <div class="info-row"><span>Receipt Accuracy:</span><span>${this.calculatePercentage(summaryStats.quantities.totalReceived, summaryStats.quantities.totalOrdered)}%</span></div>
         </div>
       </div>
     `;
@@ -1114,14 +1897,16 @@ class GRNExporter {
           <div class="summary-value">${summaryStats.quantities.totalReceived}</div>
           <div class="summary-label">Received Units</div>
         </div>
-        <div class="summary-card">
-          <div class="summary-value">${summaryStats.quantities.totalPassedQC}</div>
-          <div class="summary-label">QC Passed</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-value">${summaryStats.quantities.totalFailedQC}</div>
-          <div class="summary-label">QC Failed</div>
-        </div>
+        ${this.grnHeaderInfo.qcPerformed ? `
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.quantities.totalPassedQC}</div>
+            <div class="summary-label">QC Passed</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.quantities.totalFailedQC}</div>
+            <div class="summary-label">QC Failed</div>
+          </div>
+        ` : ''}
         <div class="summary-card">
           <div class="summary-value">${summaryStats.quantities.totalShortage}</div>
           <div class="summary-label">Shortage</div>
@@ -1134,10 +1919,12 @@ class GRNExporter {
           <div class="summary-value">${summaryStats.quantities.totalNotOrderedUnits}</div>
           <div class="summary-label">Not Ordered</div>
         </div>
-        <div class="summary-card">
-          <div class="summary-value">${summaryStats.percentages.qcPassRate}%</div>
-          <div class="summary-label">QC Pass Rate</div>
-        </div>
+        ${this.grnHeaderInfo.qcPerformed ? `
+          <div class="summary-card">
+            <div class="summary-value">${this.calculatePercentage(summaryStats.quantities.totalPassedQC, summaryStats.quantities.totalReceived)}%</div>
+            <div class="summary-label">QC Pass Rate</div>
+          </div>
+        ` : ''}
       </div>
     `;
   }
@@ -1155,38 +1942,61 @@ class GRNExporter {
               <th>Color</th>
               <th>Ordered</th>
               <th>Received</th>
-              <th>Passed QC</th>
-              <th>Failed QC</th>
+              ${this.grnHeaderInfo.qcPerformed ? `
+                <th>Passed QC</th>
+                <th>Failed QC</th>
+              ` : ''}
               <th>Shortage</th>
               <th>Excess</th>
-              <th>QC Status</th>
+              ${this.grnHeaderInfo.qcPerformed ? `
+                <th>QC Status</th>
+              ` : ''}
               <th>Status</th>
+              <th>Remarks</th>
             </tr>
           </thead>
           <tbody>
-            ${this.grnData.map(row => this.formatPDFRow(row)).join("")}
+            ${this.grnData.map((item, index) => this.formatPDFRow(item, index + 1)).join("")}
           </tbody>
         </table>
       </div>
     `;
   }
 
-  formatPDFRow(row) {
+  formatPDFRow(item, serialNo) {
+    const qcStatusClass = this.getQCStatusClass(item);
+    const qcStatusText = this.getQCStatusText(item);
+    const statusClass = this.getStatusClass(item.Status);
+    const statusText = this.getStatusText(item.Status);
+    
     return `
       <tr>
-        <td>${row["S.No"]}</td>
-        <td>${row["Brand SKU"]}</td>
-        <td>${row["KNOT SKU"]}</td>
-        <td>${row["Size"]}</td>
-        <td>${row["Color"]}</td>
-        <td>${row["Ordered Qty"]}</td>
-        <td>${row["Received Qty"]}</td>
-        <td>${row["Passed QC Qty"] || "-"}</td>
-        <td>${row["Failed QC Qty"] || "-"}</td>
-        <td>${row["Shortage Qty"] || "-"}</td>
-        <td>${row["Excess Qty"] || "-"}</td>
-        <td><span class="status-badge qc-${row["QC Status"].toLowerCase().replace(/\s+/g, "-")}">${row["QC Status"]}</span></td>
-        <td><span class="status-badge status-${row.Status.toLowerCase().replace(/\s+/g, "-")}">${row.Status}</span></td>
+        <td>${serialNo}</td>
+        <td class="sku-cell">${item["Brand SKU"] || '-'}</td>
+        <td class="sku-cell">${item["KNOT SKU"] || '-'}</td>
+        <td>${item["Size"] || '-'}</td>
+        <td>${item["Color"] || '0'}</td>
+        <td class="qty-cell">${item["Ordered Qty"] || 0}</td>
+        <td class="qty-cell">${item["Received Qty"] || 0}</td>
+        ${this.grnHeaderInfo.qcPerformed ? `
+          <td class="qty-cell">${item["Passed QC Qty"] || '-'}</td>
+          <td class="qty-cell qc-failed">${item["Failed QC Qty"] || '-'}</td>
+        ` : ''}
+        <td class="qty-cell shortage">${item["Shortage Qty"] || '-'}</td>
+        <td class="qty-cell excess">${item["Excess Qty"] || '-'}</td>
+        ${this.grnHeaderInfo.qcPerformed ? `
+          <td>
+            <span class="status-badge ${qcStatusClass}">
+              ${qcStatusText}
+            </span>
+          </td>
+        ` : ''}
+        <td>
+          <span class="status-badge ${statusClass}">
+            ${statusText}
+          </span>
+        </td>
+        <td style="font-size: 12px; max-width: 250px;">${this.generateRemarks(item)}</td>
       </tr>
     `;
   }
@@ -1199,22 +2009,315 @@ class GRNExporter {
       </div>
     `;
   }
+
+  getStatusClass(status) {
+    const statusMap = {
+      'Complete': 'status-complete',
+      'Partial': 'status-partial',
+      'Discrepancy': 'status-discrepancy',
+      'QC Failed Receipt': 'status-qc-failed-receipt',
+      'Receipt with Unordered Items': 'status-receipt-with-unordered-items',
+      'Shortage': 'status-shortage',
+      'Excess': 'status-excess',
+      'Not Ordered': 'status-not-ordered',
+      'Not Received': 'status-not-received',
+      'complete': 'status-complete',
+      'partial': 'status-partial',
+      'discrepancy': 'status-discrepancy',
+      'qc-failed-receipt': 'status-qc-failed-receipt',
+      'receipt-with-unordered-items': 'status-receipt-with-unordered-items'
+    };
+    return statusMap[status] || 'status-complete';
+  }
+
+  getStatusText(status) {
+    const statusMap = {
+      'Complete': 'Complete',
+      'Partial': 'Partial',
+      'Discrepancy': 'Discrepancy',
+      'QC Failed Receipt': 'QC Failed Receipt',
+      'Receipt with Unordered Items': 'Receipt with Unordered Items',
+      'Shortage': 'Shortage',
+      'Excess': 'Excess',
+      'Not Ordered': 'Not Ordered',
+      'Not Received': 'Not Received',
+      'complete': 'Complete',
+      'partial': 'Partial',
+      'discrepancy': 'Discrepancy',
+      'qc-failed-receipt': 'QC Failed Receipt',
+      'receipt-with-unordered-items': 'Receipt with Unordered Items'
+    };
+    return statusMap[status] || 'Complete';
+  }
+
+  getCurrentDateTime() {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    return `${day}/${month}/${year} at ${hours}:${minutes}:${seconds}`;
+  }
 }
 
 // Utility functions for backward compatibility
 function downloadHTML(grnData, grnHeaderInfo) {
   const exporter = new GRNExporter(grnData, grnHeaderInfo);
-  return exporter.generateHTML();
+  const htmlContent = exporter.generateHTML();
+
+        // Create and trigger download
+  const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${exporter.documentNumber}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 }
 
 function downloadCSV(grnData, grnHeaderInfo) {
   const exporter = new GRNExporter(grnData, grnHeaderInfo);
-  return exporter.generateCSV();
+  const csvContent = exporter.generateCSV();
+  
+  // Create and trigger download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${exporter.documentNumber}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function downloadPDF(grnData, grnHeaderInfo) {
-  const exporter = new GRNExporter(grnData, grnHeaderInfo);
-  return exporter.generatePDF();
+  try {
+    // Create a temporary div to render the content
+    const tempDiv = document.createElement('div');
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.left = '-9999px';
+    tempDiv.style.top = '0';
+    tempDiv.style.width = '800px';
+    tempDiv.style.backgroundColor = 'white';
+    tempDiv.style.padding = '20px';
+    tempDiv.style.fontFamily = 'Arial, sans-serif';
+    tempDiv.style.fontSize = '12px';
+    tempDiv.style.lineHeight = '1.4';
+    document.body.appendChild(tempDiv);
+
+    const exporter = new GRNExporter(grnData, grnHeaderInfo);
+    const today = new Date();
+    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+    const grnDocNo = "GRN-KNOT-" + dateStr + "-" + grnHeaderInfo.brandName.replace(/\s+/g, "") + "-" + grnHeaderInfo.replenishmentNumber;
+
+    // Calculate summary statistics
+    const summaryStats = exporter.calculateSummaryStats();
+    const qcPassRate = summaryStats.qcPassRate;
+    const receiptAccuracy = summaryStats.receiptAccuracy;
+
+    // Build QC-related summary cards
+    const qcSummaryCards = grnHeaderInfo.qcPerformed ? 
+      '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+        '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalQcPassedUnits + '</div>' +
+        '<div style="font-size: 10px; color: #666; font-weight: 500;">QC Passed</div>' +
+      '</div>' +
+      '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+        '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalQcFailedUnits + '</div>' +
+        '<div style="font-size: 10px; color: #666; font-weight: 500;">QC Failed</div>' +
+      '</div>' : '';
+
+    const qcPassRateCard = grnHeaderInfo.qcPerformed ? 
+      '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+        '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + qcPassRate + '%</div>' +
+        '<div style="font-size: 10px; color: #666; font-weight: 500;">QC Pass Rate</div>' +
+      '</div>' : '';
+
+    // Build QC-related table headers
+    const qcTableHeaders = grnHeaderInfo.qcPerformed ? 
+      '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Passed QC</th>' +
+      '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Failed QC</th>' : '';
+
+    const qcStatusHeader = grnHeaderInfo.qcPerformed ? 
+      '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">QC Status</th>' : '';
+
+    // Build table rows
+    const tableRows = grnData.map((row, index) => {
+      const qcCells = grnHeaderInfo.qcPerformed ? 
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (row["Passed QC Qty"] || "-") + '</td>' +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (row["Failed QC Qty"] || "-") + '</td>' : '';
+
+      const qcStatusCell = grnHeaderInfo.qcPerformed ? 
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' +
+          '<span style="padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold; display: inline-block; text-align: center; min-width: 40px; background: ' + 
+          (row["QC Status"] === 'Passed' ? '#d4edda' : row["QC Status"] === 'Failed' ? '#f8d7da' : '#fff3cd') + 
+          '; color: ' + (row["QC Status"] === 'Passed' ? '#155724' : row["QC Status"] === 'Failed' ? '#721c24' : '#856404') + ';">' + 
+          row["QC Status"] + '</span>' +
+        '</td>' : '';
+
+      const statusBgColor = row.Status === 'Complete' ? '#d4edda' : 
+                           row.Status === 'Shortage' ? '#f8d7da' : 
+                           row.Status === 'Excess' ? '#fff3cd' : 
+                           row.Status === 'Not Ordered' ? '#d1ecf1' : 
+                           row.Status === 'Not Received' ? '#e2e3e5' : '#f8d7da';
+
+      const statusTextColor = row.Status === 'Complete' ? '#155724' : 
+                             row.Status === 'Shortage' ? '#721c24' : 
+                             row.Status === 'Excess' ? '#856404' : 
+                             row.Status === 'Not Ordered' ? '#0c5460' : 
+                             row.Status === 'Not Received' ? '#383d41' : '#721c24';
+
+      return '<tr>' +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (index + 1) + '</td>' +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Brand SKU"] + '</td>' +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["KNOT SKU"] + '</td>' +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Size"] + '</td>' +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Color"] + '</td>' +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Ordered Qty"] + '</td>' +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Received Qty"] + '</td>' +
+        qcCells +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (row["Shortage Qty"] || "-") + '</td>' +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (row["Excess Qty"] || "-") + '</td>' +
+        qcStatusCell +
+        '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' +
+          '<span style="padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold; display: inline-block; text-align: center; min-width: 40px; background: ' + statusBgColor + '; color: ' + statusTextColor + ';">' + row.Status + '</span>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    // Create HTML content for PDF
+    tempDiv.innerHTML = 
+      '<div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px;">' +
+        '<h1 style="margin: 0; color: #2563eb; font-size: 24px; font-weight: bold;">Goods Received Note</h1>' +
+        '<div style="font-size: 14px; color: #666; margin-top: 5px; font-weight: 600;">' + grnDocNo + '</div>' +
+        '<div style="font-size: 12px; color: #888; margin-top: 3px;">Generated on ' + today.toLocaleDateString("en-GB") + ' at ' + today.toLocaleTimeString() + '</div>' +
+      '</div>' +
+
+      '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">' +
+        '<div style="background: #f8f9fa; padding: 12px; border-radius: 4px; border: 1px solid #e9ecef;">' +
+          '<h3 style="margin: 0 0 8px 0; color: #2563eb; font-size: 14px; font-weight: bold;">Order Information</h3>' +
+          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+            '<span>PO Number:</span><span>' + grnHeaderInfo.poNumber + '</span>' +
+          '</div>' +
+          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+            '<span>Vendor:</span><span>' + grnHeaderInfo.brandName + '</span>' +
+          '</div>' +
+          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+            '<span>Replenishment:</span><span>' + grnHeaderInfo.replenishmentNumber + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div style="background: #f8f9fa; padding: 12px; border-radius: 4px; border: 1px solid #e9ecef;">' +
+          '<h3 style="margin: 0 0 8px 0; color: #2563eb; font-size: 14px; font-weight: bold;">Receipt Information</h3>' +
+          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+            '<span>Inward Date:</span><span>' + grnHeaderInfo.inwardDate + '</span>' +
+          '</div>' +
+          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+            '<span>Warehouse:</span><span>' + grnHeaderInfo.warehouseNo + '</span>' +
+          '</div>' +
+          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+            '<span>Receipt Accuracy:</span><span>' + receiptAccuracy + '%</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px;">' +
+        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalOrderedUnits + '</div>' +
+          '<div style="font-size: 10px; color: #666; font-weight: 500;">Ordered Units</div>' +
+        '</div>' +
+        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalReceivedUnits + '</div>' +
+          '<div style="font-size: 10px; color: #666; font-weight: 500;">Received Units</div>' +
+        '</div>' +
+        qcSummaryCards +
+        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalShortageUnits + '</div>' +
+          '<div style="font-size: 10px; color: #666; font-weight: 500;">Shortage</div>' +
+        '</div>' +
+        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalExcessUnits + '</div>' +
+          '<div style="font-size: 10px; color: #666; font-weight: 500;">Excess</div>' +
+        '</div>' +
+        '<div style="text-align: center; padding: 10px 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">' +
+          '<div style="font-size: 18px; font-weight: bold; color: #2563eb; margin-bottom: 3px;">' + summaryStats.totalNotOrderedUnits + '</div>' +
+          '<div style="font-size: 10px; color: #666; font-weight: 500;">Not Ordered</div>' +
+        '</div>' +
+        qcPassRateCard +
+      '</div>' +
+
+      '<div style="margin-top: 15px; overflow-x: auto;">' +
+        '<table style="width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed;">' +
+          '<thead>' +
+            '<tr style="background-color: #f2f2f2;">' +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">S.No</th>' +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Brand SKU</th>' +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">KNOT SKU</th>' +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Size</th>' +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Color</th>' +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Ordered</th>' +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Received</th>' +
+              qcTableHeaders +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Shortage</th>' +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Excess</th>' +
+              qcStatusHeader +
+              '<th style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 0.5px;">Status</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' +
+            tableRows +
+          '</tbody>' +
+        '</table>' +
+      '</div>' +
+
+      '<div style="margin-top: 20px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 10px;">' +
+        '<strong>KNOT Inventory Management System</strong><br>' +
+        'This is a computer-generated document. For queries, contact the warehouse team.' +
+      '</div>';
+
+    // Use html2canvas to convert the div to canvas
+    import('html2canvas').then(({ default: html2canvas }) => {
+      html2canvas(tempDiv, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      }).then(canvas => {
+        // Convert canvas to PDF using jsPDF
+        import('jspdf').then(({ default: jsPDF }) => {
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          const imgWidth = 210; // A4 width in mm
+          const pageHeight = 295; // A4 height in mm
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          let heightLeft = imgHeight;
+
+          let position = 0;
+
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+
+          while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+          }
+
+          pdf.save(grnDocNo + '.pdf');
+          document.body.removeChild(tempDiv);
+        });
+      });
+    });
+
+  } catch (error) {
+    console.error("Error downloading PDF:", error);
+    alert("Error downloading PDF. Please try again.");
+  }
 }
 
 // Export the class and utility functions
