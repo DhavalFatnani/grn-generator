@@ -187,15 +187,16 @@ const GRNGenerator = () => {
   ).length;
 
   // Calculate items that are only QC failed (no quantity issues)
-  summaryStats.items.onlyQCFailed = 
-    summaryStats.items.failedQC + 
-    summaryStats.items.partialQC - 
-    summaryStats.items.withBothIssues;
+  summaryStats.items.onlyQCFailed = grnData.filter((item) => 
+    item["QC Status"] !== "Passed" && 
+    !["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
+  ).length;
 
   // Calculate items that only have quantity issues (no QC issues)
-  summaryStats.items.onlyQuantityIssues = 
-    Object.values(summaryStats.items.quantityIssues).reduce((sum, count) => sum + count, 0) - 
-    summaryStats.items.withBothIssues;
+  summaryStats.items.onlyQuantityIssues = grnData.filter((item) => 
+    item["QC Status"] === "Passed" && 
+    ["Shortage", "Excess", "Not Received", "Excess Receipt"].includes(item.Status)
+  ).length;
 
   // Calculate total items with any issues
   summaryStats.items.withIssues = 

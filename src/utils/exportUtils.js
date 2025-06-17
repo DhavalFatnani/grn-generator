@@ -313,16 +313,27 @@ class GRNExporter {
   }
 
   calculateOnlyQCFailed(summaryStats) {
-    return summaryStats.totalQcFailedUnits - this.calculateWithBothIssues(summaryStats);
+    // Count items that have QC issues but no quantity issues
+    return this.grnData.filter((item) => 
+      item["QC Status"] !== "Passed" && 
+      !["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
+    ).length;
   }
 
   calculateOnlyQuantityIssues(summaryStats) {
-    return summaryStats.totalShortageUnits + summaryStats.totalExcessUnits + summaryStats.totalNotOrderedUnits - this.calculateWithBothIssues(summaryStats);
+    // Count items that have quantity issues but no QC issues
+    return this.grnData.filter((item) => 
+      item["QC Status"] === "Passed" && 
+      ["Shortage", "Excess", "Not Received", "Excess Receipt"].includes(item.Status)
+    ).length;
   }
 
   calculateWithBothIssues(summaryStats) {
-    // This is a placeholder - you may need to implement based on your business logic
-    return 0;
+    // Count items that have both QC issues and quantity issues
+    return this.grnData.filter((item) => 
+      item["QC Status"] !== "Passed" && 
+      ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
+    ).length;
   }
 
   getCSVHeaders() {
