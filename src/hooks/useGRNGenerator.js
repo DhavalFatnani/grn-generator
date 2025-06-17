@@ -304,7 +304,8 @@ export const useGRNGenerator = () => {
           "Failed QC Qty": item.totalFailQty,
           "Shortage Qty": Math.max(0, item.orderedQty - (item.receivedQty + item.totalFailQty)),
           "Excess Qty": Math.max(0, (item.receivedQty + item.totalFailQty) - item.orderedQty),
-          "QC Status": item.totalFailQty > 0 ? (item.totalFailQty === (item.receivedQty + item.totalFailQty) ? "Failed" : "Partial") : "Passed",
+          "QC Status": (item.receivedQty + item.totalFailQty) === 0 ? "Not Performed" : 
+                      item.totalFailQty > 0 ? (item.totalFailQty === (item.receivedQty + item.totalFailQty) ? "Failed" : "Partial") : "Passed",
           "Status": status,
           "Remarks": (item.fails && item.fails.length > 0) ? 
             `QC Failed: ${item.fails.map(f => `${f.qty} ${f.status}`).join(", ")}` : 
