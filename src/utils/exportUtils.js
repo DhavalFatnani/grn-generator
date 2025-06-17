@@ -96,27 +96,51 @@ class GRNExporter {
       ["Receipt Accuracy", summaryStats.percentages.receiptAccuracy + "%"],
       ["Complete Items", summaryStats.items.complete],
       [""],
-      ["QUALITY CONTROL"],
-      ["Total QC Passed Units", summaryStats.quantities.totalPassedQC],
-      ["QC Passed - Against PO", this.calculateQCPassedOrdered()],
-      ["QC Passed - Not Ordered", this.calculateQCPassedNotOrdered()],
-      ["Total QC Failed Units", summaryStats.quantities.totalFailedQC],
-      ["QC Pass Rate", summaryStats.percentages.qcPassRate + "%"],
-      [""],
+    ];
+
+    // Add QC section only if QC was performed
+    if (this.grnHeaderInfo.qcPerformed) {
+      lines.push(
+        ["QUALITY CONTROL"],
+        ["Total QC Passed Units", summaryStats.quantities.totalPassedQC],
+        ["QC Passed - Against PO", this.calculateQCPassedOrdered()],
+        ["QC Passed - Not Ordered", this.calculateQCPassedNotOrdered()],
+        ["Total QC Failed Units", summaryStats.quantities.totalFailedQC],
+        ["QC Pass Rate", summaryStats.percentages.qcPassRate + "%"],
+        [""]
+      );
+    } else {
+      lines.push(
+        ["QUALITY CONTROL"],
+        ["QC Status", "Not Performed"],
+        [""]
+      );
+    }
+
+    lines.push(
       ["ISSUES SUMMARY"],
       ["Total Shortage Units", summaryStats.quantities.totalShortage],
       ["Total Excess Units", summaryStats.quantities.totalExcess],
-      ["Not Ordered Units", summaryStats.quantities.totalNotOrderedUnits],
-      ["Items with QC Issues Only", this.calculateOnlyQCFailed(summaryStats)],
-      ["Items with Quantity Issues Only", this.calculateOnlyQuantityIssues(summaryStats)],
-      ["Items with Both QC and Quantity Issues", this.calculateWithBothIssues(summaryStats)],
+      ["Not Ordered Units", summaryStats.quantities.totalNotOrderedUnits]
+    );
+
+    // Add QC-related issues only if QC was performed
+    if (this.grnHeaderInfo.qcPerformed) {
+      lines.push(
+        ["Items with QC Issues Only", this.calculateOnlyQCFailed(summaryStats)],
+        ["Items with Quantity Issues Only", this.calculateOnlyQuantityIssues(summaryStats)],
+        ["Items with Both QC and Quantity Issues", this.calculateWithBothIssues(summaryStats)]
+      );
+    }
+
+    lines.push(
       [""],
       ["PERFORMANCE METRICS"],
       ["Complete Items Percentage", summaryStats.percentages.complete + "%"],
       [""],
       ["DETAILED ITEM DATA"],
       this.getCSVHeaders()
-    ];
+    );
 
     // Add data rows
     lines.push(...this.grnData.map(row => this.formatCSVRow(row)));
@@ -151,19 +175,37 @@ class GRNExporter {
   }
 
   getCSVHeaders() {
-    return [
-      "S.No", "Brand SKU", "KNOT SKU", "Size", "Color", "Ordered Qty", "Received Qty",
-      "Passed QC Qty", "Failed QC Qty", "Shortage Qty", "Excess Qty", "QC Status", "Status", "GRN Date", "Remarks"
+    const baseHeaders = [
+      "S.No", "Brand SKU", "KNOT SKU", "Size", "Color", "Ordered Qty", "Received Qty"
     ];
+    
+    const qcHeaders = this.grnHeaderInfo.qcPerformed ? [
+      "Passed QC Qty", "Failed QC Qty", "QC Status"
+    ] : [];
+    
+    const remainingHeaders = [
+      "Shortage Qty", "Excess Qty", "Status", "GRN Date", "Remarks"
+    ];
+    
+    return [...baseHeaders, ...qcHeaders, ...remainingHeaders];
   }
 
   formatCSVRow(row) {
-    return [
+    const baseRow = [
       row["S.No"], row["Brand SKU"], row["KNOT SKU"], row["Size"], row["Color"],
-      row["Ordered Qty"], row["Received Qty"], row["Passed QC Qty"] || "",
-      row["Failed QC Qty"] || "", row["Shortage Qty"] || "", row["Excess Qty"] || "",
-      row["QC Status"], row["Status"], row["GRN Date"], row["Remarks"]
+      row["Ordered Qty"], row["Received Qty"]
     ];
+    
+    const qcRow = this.grnHeaderInfo.qcPerformed ? [
+      row["Passed QC Qty"] || "", row["Failed QC Qty"] || "", row["QC Status"]
+    ] : [];
+    
+    const remainingRow = [
+      row["Shortage Qty"] || "", row["Excess Qty"] || "",
+      row["Status"], row["GRN Date"], row["Remarks"]
+    ];
+    
+    return [...baseRow, ...qcRow, ...remainingRow];
   }
 
   convertToCSVString(lines) {
@@ -530,6 +572,18 @@ class GRNExporter {
   }
 
   buildHTMLHeader() {
+    const qcSection = this.grnHeaderInfo.qcPerformed ? `
+          <div class="info-item">
+            <div class="info-label">QC Done By</div>
+            <div class="info-value">${Array.isArray(this.grnHeaderInfo.qcDoneBy) ? this.grnHeaderInfo.qcDoneBy.join(", ") : this.grnHeaderInfo.qcDoneBy}</div>
+          </div>
+    ` : `
+          <div class="info-item">
+            <div class="info-label">QC Status</div>
+            <div class="info-value">Not Performed</div>
+          </div>
+    `;
+
     return `
       <div class="header">
         <h1>Goods Received Note</h1>
@@ -555,12 +609,45 @@ class GRNExporter {
             <div class="info-label">Warehouse</div>
             <div class="info-value">${this.grnHeaderInfo.warehouseNo}</div>
           </div>
+          <div class="info-item">
+            <div class="info-label">Warehouse Manager</div>
+            <div class="info-value">${this.grnHeaderInfo.warehouseManagerName}</div>
+          </div>
+          ${qcSection}
+          <div class="info-item">
+            <div class="info-label">Verified By</div>
+            <div class="info-value">${this.grnHeaderInfo.verifiedBy}</div>
+          </div>
         </div>
       </div>
     `;
   }
 
   buildHTMLSummary(summaryStats) {
+    const qcCards = this.grnHeaderInfo.qcPerformed ? `
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.quantities.totalPassedQC}</div>
+            <div class="summary-label">QC Passed</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.quantities.totalFailedQC}</div>
+            <div class="summary-label">QC Failed</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value">${summaryStats.percentages.qcPassRate}%</div>
+            <div class="summary-label">QC Pass Rate</div>
+          </div>
+    ` : `
+          <div class="summary-card">
+            <div class="summary-value">-</div>
+            <div class="summary-label">QC Status</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value">Not Performed</div>
+            <div class="summary-label">QC</div>
+          </div>
+    `;
+
     return `
       <div class="content">
         <div class="summary-grid">
@@ -576,14 +663,7 @@ class GRNExporter {
             <div class="summary-value">${summaryStats.quantities.totalReceived}</div>
             <div class="summary-label">Received Units</div>
           </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.quantities.totalPassedQC}</div>
-            <div class="summary-label">QC Passed</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.quantities.totalFailedQC}</div>
-            <div class="summary-label">QC Failed</div>
-          </div>
+          ${qcCards}
           <div class="summary-card">
             <div class="summary-value">${summaryStats.quantities.totalShortage}</div>
             <div class="summary-label">Shortage</div>
@@ -595,10 +675,6 @@ class GRNExporter {
           <div class="summary-card">
             <div class="summary-value">${summaryStats.quantities.totalNotOrderedUnits}</div>
             <div class="summary-label">Not Ordered</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-value">${summaryStats.percentages.qcPassRate}%</div>
-            <div class="summary-label">QC Pass Rate</div>
           </div>
           <div class="summary-card">
             <div class="summary-value">${summaryStats.percentages.receiptAccuracy}%</div>
@@ -621,6 +697,22 @@ class GRNExporter {
   }
 
   buildHTMLTable() {
+    const qcHeaders = this.grnHeaderInfo.qcPerformed ? `
+              <th>Passed QC</th>
+              <th>Failed QC</th>
+              <th>QC Status</th>
+    ` : '';
+
+    const qcCells = this.grnHeaderInfo.qcPerformed ? `
+        <td class="qty-cell">${row["Passed QC Qty"] || "-"}</td>
+        <td class="qty-cell qc-failed">${row["Failed QC Qty"] || "-"}</td>
+        <td>
+          <span class="status-badge status-${row["QC Status"].toLowerCase().replace(/\s+/g, "-")}">
+            ${row["QC Status"]}
+          </span>
+        </td>
+    ` : '';
+
     return `
       <div class="table-container">
         <table>
@@ -633,11 +725,9 @@ class GRNExporter {
               <th>Color</th>
               <th>Ordered</th>
               <th>Received</th>
-              <th>Passed QC</th>
-              <th>Failed QC</th>
+              ${qcHeaders}
               <th>Shortage</th>
               <th>Excess</th>
-              <th>QC Status</th>
               <th>Status</th>
               <th>Remarks</th>
             </tr>
@@ -651,6 +741,16 @@ class GRNExporter {
   }
 
   formatHTMLRow(row) {
+    const qcCells = this.grnHeaderInfo.qcPerformed ? `
+        <td class="qty-cell">${row["Passed QC Qty"] || "-"}</td>
+        <td class="qty-cell qc-failed">${row["Failed QC Qty"] || "-"}</td>
+        <td>
+          <span class="status-badge status-${row["QC Status"].toLowerCase().replace(/\s+/g, "-")}">
+            ${row["QC Status"]}
+          </span>
+        </td>
+    ` : '';
+
     return `
       <tr>
         <td>${row["S.No"]}</td>
@@ -660,15 +760,9 @@ class GRNExporter {
         <td>${row["Color"]}</td>
         <td class="qty-cell">${row["Ordered Qty"]}</td>
         <td class="qty-cell">${row["Received Qty"]}</td>
-        <td class="qty-cell">${row["Passed QC Qty"] || "-"}</td>
-        <td class="qty-cell qc-failed">${row["Failed QC Qty"] || "-"}</td>
+        ${qcCells}
         <td class="qty-cell shortage">${row["Shortage Qty"] || "-"}</td>
         <td class="qty-cell excess">${row["Excess Qty"] || "-"}</td>
-        <td>
-          <span class="status-badge status-${row["QC Status"].toLowerCase().replace(/\s+/g, "-")}">
-            ${row["QC Status"]}
-          </span>
-        </td>
         <td>
           <span class="status-badge status-${row.Status.toLowerCase().replace(/\s+/g, "-")}">
             ${row.Status}

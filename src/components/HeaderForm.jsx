@@ -51,6 +51,19 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
     }
   };
 
+  const handleQCCheckboxChange = (e) => {
+    const { checked } = e.target;
+    console.log("QC checkbox changed:", checked);
+    
+    // If QC is not performed, clear the QC Done By field
+    if (!checked) {
+      handleHeaderChange({ target: { name: 'qcDoneBy', value: [] } });
+    }
+    
+    // Update the QC performed flag
+    handleHeaderChange({ target: { name: 'qcPerformed', value: checked } });
+  };
+
   return (
     <div className="p-6 rounded-lg bg-white border border-gray-200 shadow-sm">
       <div className="mb-6">
@@ -237,54 +250,75 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
       {/* QC and Verification Information */}
       <div>
         <h3 className="text-sm font-medium text-gray-700 mb-3">QC and Verification Information</h3>
+        
+        {/* QC Performed Checkbox */}
+        <div className="mb-4">
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={grnHeaderInfo.qcPerformed || false}
+              onChange={handleQCCheckboxChange}
+              name="qcPerformed"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <span className="text-sm font-medium text-gray-700">
+              Quality Control (QC) has been performed
+            </span>
+          </label>
+        </div>
+
         <div className="grid md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              QC Done By <span className="text-blue-500">*</span>
-            </label>
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2 p-2 min-h-[2.5rem] border border-gray-300 rounded-md bg-white">
-                {Array.isArray(grnHeaderInfo.qcDoneBy) && grnHeaderInfo.qcDoneBy.map((person) => (
-                  <span
-                    key={person}
-                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
-                  >
-                    {person}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(person)}
-                      className="ml-1.5 -mr-0.5 h-4 w-4 rounded-full inline-flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          {/* QC Done By - Only show if QC is performed */}
+          {grnHeaderInfo.qcPerformed && (
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                QC Done By
+              </label>
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2 p-2 min-h-[2.5rem] border border-gray-300 rounded-md bg-white">
+                  {Array.isArray(grnHeaderInfo.qcDoneBy) && grnHeaderInfo.qcDoneBy.map((person) => (
+                    <span
+                      key={person}
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
                     >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <select
-                value=""
-                onChange={handleMultiSelectChange}
-                name="qcDoneBy"
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              >
-                <option value="">Add from existing...</option>
-                {previousValues.qcPersons
-                  .filter(person => !Array.isArray(grnHeaderInfo.qcDoneBy) || !grnHeaderInfo.qcDoneBy.includes(person))
-                  .map((person) => (
-                    <option key={person} value={person}>
                       {person}
-                    </option>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(person)}
+                        className="ml-1.5 -mr-0.5 h-4 w-4 rounded-full inline-flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        ×
+                      </button>
+                    </span>
                   ))}
-              </select>
-              <input
-                type="text"
-                onBlur={handleMultiInputAdd}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleMultiInputAdd(e); }}
-                name="qcDoneByInput"
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                placeholder="Type new QC person name and press Enter/Tab"
-              />
+                </div>
+                <select
+                  value=""
+                  onChange={handleMultiSelectChange}
+                  name="qcDoneBy"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                >
+                  <option value="">Add from existing...</option>
+                  {previousValues.qcPersons
+                    .filter(person => !Array.isArray(grnHeaderInfo.qcDoneBy) || !grnHeaderInfo.qcDoneBy.includes(person))
+                    .map((person) => (
+                      <option key={person} value={person}>
+                        {person}
+                      </option>
+                    ))}
+                </select>
+                <input
+                  type="text"
+                  onBlur={handleMultiInputAdd}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleMultiInputAdd(e); }}
+                  name="qcDoneByInput"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Type new QC person name and press Enter/Tab"
+                />
+              </div>
             </div>
-          </div>
+          )}
+          
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">
               Verified By <span className="text-blue-500">*</span>

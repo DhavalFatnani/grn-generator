@@ -36,6 +36,7 @@ const GRNGenerator = () => {
     inwardDate: "",
     warehouseNo: "",
     qcDoneBy: [],
+    qcPerformed: false,
     verifiedBy: "",
     warehouseManagerName: "",
   });
