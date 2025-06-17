@@ -211,11 +211,9 @@ export const useGRNGenerator = () => {
         return; // Skip if this is a duplicate reference or no canonical SKU
       }
 
-      if (item.totalFailQty > item.receivedQty) {
-        validationErrors.push(
-          `Logical inconsistency for SKU ${canonicalSku}: QC fail quantity (${item.totalFailQty}) is greater than put away quantity (${item.receivedQty}). QC failed items must be physically received to be failed.`
-        );
-      }
+      // Removed validation for QC fail quantity vs putaway quantity
+      // The correct relationship is: Received = QC Fail Qty + Put Away Qty
+      // This allows QC fail quantity to be greater than putaway quantity
     });
 
     // Check for validation errors before proceeding
