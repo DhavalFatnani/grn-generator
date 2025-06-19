@@ -1,21 +1,21 @@
 import { useState, useCallback, useEffect } from 'react';
 import Papa from 'papaparse';
+import { validateFile, detectColumns, normalizeSku, parseQuantity } from '../utils/helpers.js';
+import { FILE_VALIDATION, ERROR_MESSAGES } from '../utils/constants.js';
 
 export const useFileUpload = () => {
-  const [purchaseOrderData, setPurchaseOrderData] = useState([]);
-  const [putAwayData, setPutAwayData] = useState([]);
-  const [qcFailData, setQcFailData] = useState([]);
+  const [data, setData] = useState({
+    purchaseOrder: [],
+    putAway: [],
+    qcFail: []
+  });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState([]);
   const [grnHeaderInfo, setGrnHeaderInfo] = useState({
     poNumber: "",
     brandName: "",
   });
-
-  // Column mapping state
   const [columnMapping, setColumnMapping] = useState({});
-
-  // Preview modal state
   const [previewModal, setPreviewModal] = useState({
     isOpen: false,
     fileType: "",
@@ -27,437 +27,310 @@ export const useFileUpload = () => {
 
   // Debug effect to monitor putAwayData changes
   useEffect(() => {
-    console.log('putAwayData state changed:', putAwayData.length, 'rows');
-    if (putAwayData.length > 0) {
-      console.log('First putAwayData row:', putAwayData[0]);
+    console.log('putAwayData state changed:', data.putAway.length, 'rows');
+    if (data.putAway.length > 0) {
+      console.log('First putAwayData row:', data.putAway[0]);
     }
-  }, [putAwayData]);
+  }, [data.putAway]);
 
-  const handlePurchaseOrderUpload = useCallback((file) => {
-    setLoading(true);
-    setErrors([]);
+  const extractHeaderInfo = (results, fileType) => {
+    if (fileType !== 'purchaseOrder') return { poNumber: "", brandName: "" };
+    
+    let poNumber = "", brandName = "";
+    
+    // Try to extract PO Number from J6 (row 5, column 9) if it exists
+    if (results.data.length > 5 && results.data[5]?.[10]) {
+      poNumber = results.data[5][10].toString().trim();
+    }
+    
+    // Try to extract Brand Name from C11 (row 10, column 2) if it exists
+    if (results.data.length > 10 && results.data[10]?.[2]) {
+      brandName = results.data[10][2].toString().trim();
+    }
 
-    Papa.parse(file, {
-      header: false,
-      dynamicTyping: false,
-      skipEmptyLines: false,
-      complete: (results) => {
-        try {
-          if (results.errors.length > 0) {
-            setErrors(results.errors.map((err) => err.message));
-            setLoading(false);
-            return;
-          }
-
-          // Extract PO Number from J6 (row 5, column 9)
-          let poNumber = "";
-          if (
-            results.data.length > 5 &&
-            results.data[5] &&
-            results.data[5][10]
-          ) {
-            poNumber = results.data[5][10].toString().trim();
-          }
-          // Extract Brand Name from C9 (row 8, column 2) - with fallback search
-          let brandName = "";
-          if (
-            results.data.length > 10 &&
-            results.data[10] &&
-            results.data[10][2]
-          ) {
-            brandName = results.data[10][2].toString().trim();
-          }
-
-          // If brand name is still empty, search for it in nearby cells
-          if (!brandName || brandName === "") {
-            for (let row = 6; row <= 12; row++) {
-              if (results.data[row]) {
-                for (let col = 0; col <= 5; col++) {
-                  const cellValue =
-                    results.data[row] && results.data[row][col]
-                      ? results.data[row][col].toString().trim()
-                      : "";
-                  // Look for cells that might contain brand name (non-empty, not numbers, reasonable length)
-                  if (
-                    cellValue &&
-                    cellValue.length > 2 &&
-                    cellValue.length < 50 &&
-                    isNaN(cellValue) &&
-                    !cellValue.toLowerCase().includes("sno")
-                  ) {
-                    brandName = cellValue;
-                    break;
-                  }
-                }
-                if (brandName) break;
-              }
-            }
-          }
-          setGrnHeaderInfo((prev) => ({ ...prev, poNumber, brandName }));
-
-          // Find header row automatically
-          let headerRowIndex = -1;
-          for (let i = 0; i < results.data.length; i++) {
-            const row = results.data[i];
-            if (
-              row &&
-              row.some(
-                (cell) => cell && cell.toString().toLowerCase().includes("sno"),
-              )
-            ) {
-              headerRowIndex = i;
+    // If brand name is still empty, search for it in nearby cells
+    if (!brandName) {
+      for (let row = 6; row <= 12; row++) {
+        if (results.data[row]) {
+          for (let col = 0; col <= 5; col++) {
+            const cellValue = results.data[row]?.[col]?.toString().trim() || "";
+            if (cellValue && cellValue.length > 2 && cellValue.length < 50 && 
+                isNaN(cellValue) && !cellValue.toLowerCase().includes("sno")) {
+              brandName = cellValue;
               break;
             }
           }
-
-          // Process the data first
-          const processedData = results.data
-            .slice(headerRowIndex + 1)
-            .filter(
-              (row) =>
-                row &&
-                row.some((cell) => cell && cell.toString().trim() !== ""),
-            )
-            .map((row) => {
-              const obj = {};
-              const headers = results.data[headerRowIndex].map(h => (h || "").toString().trim());
-              headers.forEach((header, index) => {
-                obj[header] = row[index] ? row[index].toString().trim() : "";
-              });
-              return obj;
-            })
-            .filter((obj) => obj["Sno"] && obj["Sno"] !== "");
-
-          // Show preview modal for confirmation
-          setPreviewModal({
-            isOpen: true,
-            fileType: "Purchase Order",
-            processedData: processedData,
-            rawData: results.data,
-            detectedHeaders: headerRowIndex >= 0 ? {
-              rowIndex: headerRowIndex,
-              headers: results.data[headerRowIndex].map(h => (h || "").toString().trim())
-            } : null,
-            onConfirm: (selectedData) => {
-              processPurchaseOrderData(selectedData, poNumber, brandName);
-              setPreviewModal(prev => ({ ...prev, isOpen: false }));
-            }
-          });
-
-          setLoading(false);
-        } catch (error) {
-          setErrors([`Error processing Purchase Order: ${error.message}`]);
-          setLoading(false);
+          if (brandName) break;
         }
-      },
-      error: (error) => {
-        setErrors([`File parsing error: ${error.message}`]);
-        setLoading(false);
-      },
-    });
-  }, []);
-
-  const processPurchaseOrderData = (selectedData, poNumber, brandName) => {
-    const { headers, data, grnHeaderInfo } = selectedData;
-    
-    // Update GRN header info with selected values
-    if (grnHeaderInfo) {
-      setGrnHeaderInfo(prev => ({
-        ...prev,
-        poNumber: grnHeaderInfo.poNumber?.value || poNumber,
-        brandName: grnHeaderInfo.brandName?.value || brandName,
-        replenishmentNumber: grnHeaderInfo.replenishmentNumber?.value || "",
-        inwardDate: grnHeaderInfo.inwardDate?.value || "",
-        warehouseNo: grnHeaderInfo.warehouseNo?.value || "",
-        verifiedBy: grnHeaderInfo.verifiedBy?.value || "",
-        warehouseManagerName: grnHeaderInfo.warehouseManagerName?.value || ""
-      }));
+      }
     }
     
-    const processedData = data
-      .filter(
-        (row) =>
-          row &&
-          row.some((cell) => cell && cell.toString().trim() !== ""),
-      )
-      .map((row) => {
+    // For simple files without metadata, provide default values
+    if (!poNumber) {
+      poNumber = "Sample PO";
+    }
+    if (!brandName) {
+      brandName = "Sample Brand";
+    }
+    
+    return { poNumber, brandName };
+  };
+
+  const findHeaderRow = (data, fileType) => {
+    console.log('findHeaderRow: Searching for header row in data:', data);
+    console.log('findHeaderRow: Data length:', data.length);
+    
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      console.log(`findHeaderRow: Checking row ${i}:`, row);
+      
+      if (fileType === 'purchaseOrder') {
+        if (row?.some(cell => {
+          const cellStr = cell?.toString().toLowerCase();
+          const hasSno = cellStr.includes("sno");
+          console.log(`findHeaderRow: Cell "${cell}" -> "${cellStr}" -> hasSno: ${hasSno}`);
+          return hasSno;
+        })) {
+          console.log(`findHeaderRow: Found purchaseOrder header row at index ${i}`);
+          return i;
+        }
+      } else if (fileType === 'putAway') {
+        if (row?.some(cell => {
+          const cellStr = cell?.toString().toLowerCase();
+          const isPutAwayHeader = cellStr.replace(/\s+/g, '').startsWith('binlocation') && row.length >= 2 && row[1]?.toString().toLowerCase().includes('sku');
+          console.log(`findHeaderRow: Cell "${cell}" -> "${cellStr}" -> isPutAwayHeader: ${isPutAwayHeader}`);
+          return isPutAwayHeader;
+        })) {
+          console.log(`findHeaderRow: Found putAway header row at index ${i}`);
+          return i;
+        }
+      } else if (fileType === 'qcFail') {
+        if (row?.some(cell => {
+          const cellStr = cell?.toString().toLowerCase();
+          const isQcFailHeader = cellStr === 'sku' && row.length >= 2 && row[1]?.toString().toLowerCase().includes('remark');
+          console.log(`findHeaderRow: Cell "${cell}" -> "${cellStr}" -> isQcFailHeader: ${isQcFailHeader}`);
+          return isQcFailHeader;
+        })) {
+          console.log(`findHeaderRow: Found qcFail header row at index ${i}`);
+          return i;
+        }
+      }
+    }
+    
+    console.log(`findHeaderRow: No header row found for fileType: ${fileType}`);
+    return -1;
+  };
+
+  const processCSVData = (results, fileType) => {
+    const { poNumber, brandName } = extractHeaderInfo(results, fileType);
+    
+    if (fileType === 'purchaseOrder') {
+      setGrnHeaderInfo(prev => ({ ...prev, poNumber, brandName }));
+    }
+
+    const headerRowIndex = findHeaderRow(results.data, fileType);
+    if (headerRowIndex === -1) {
+      throw new Error("Could not find header row");
+    }
+
+    const headers = results.data[headerRowIndex].map(h => (h || "").toString().trim());
+    const detectedColumns = detectColumns(headers, fileType);
+    
+    const processedData = results.data
+      .slice(headerRowIndex + 1)
+      .filter(row => row?.some(cell => cell?.toString().trim() !== ""))
+      .map(row => {
         const obj = {};
         headers.forEach((header, index) => {
-          // Trim both header and value for each cell
-          const trimmedHeader = header.trim();
-          obj[trimmedHeader] = row[index] ? row[index].toString().trim() : "";
-        });
-        // Additionally, trim all string values in the object (in case of extra spaces in CSV)
-        Object.keys(obj).forEach((key) => {
-          if (typeof obj[key] === 'string') {
-            obj[key] = obj[key].trim();
-          }
+          obj[header] = row[index]?.toString().trim() || "";
         });
         return obj;
       })
-      .filter((obj) => obj["Sno"] && obj["Sno"] !== "");
-    
-    setPurchaseOrderData(processedData);
+      .filter(obj => {
+        if (fileType === 'purchaseOrder') {
+          return obj["Sno"] && obj["Sno"] !== "";
+        }
+        // For putAway and qcFail, allow all rows after header
+        return Object.values(obj).some(val => val && val !== "");
+      });
+
+    return {
+      headers,
+      data: processedData,
+      detectedColumns,
+      grnHeaderInfo: fileType === 'purchaseOrder' ? { poNumber, brandName } : null
+    };
   };
 
-  const handlePutAwayUpload = useCallback((file) => {
-    console.log('Starting Put Away upload for file:', file.name);
-    console.log('File size:', file.size, 'bytes');
-    console.log('File type:', file.type);
-    console.log('File last modified:', new Date(file.lastModified));
-    
+  const handleFileUpload = useCallback((file, fileType) => {
+    console.log(`Starting file upload for ${fileType}:`, file.name);
     setLoading(true);
     setErrors([]);
 
+    const validation = validateFile(file, FILE_VALIDATION.allowedTypes, FILE_VALIDATION.maxSize);
+    if (!validation.isValid) {
+      console.error('File validation failed:', validation.errors);
+      setErrors(validation.errors);
+      setLoading(false);
+      return;
+    }
+
+    console.log('File validation passed, starting Papa.parse...');
     Papa.parse(file, {
       header: false,
       dynamicTyping: false,
       skipEmptyLines: true,
       complete: (results) => {
-        console.log('Papa Parse completed. Total rows:', results.data.length);
-        console.log('First few rows:', results.data.slice(0, 5));
+        console.log(`Papa.parse completed for ${fileType}:`, results);
+        console.log(`Papa.parse raw data for ${fileType}:`, results.data);
+        console.log(`Papa.parse first 3 rows for ${fileType}:`, results.data.slice(0, 3));
+        console.log(`Papa.parse data length:`, results.data.length);
         
         try {
           if (results.errors.length > 0) {
-            console.error('Papa Parse errors:', results.errors);
-            setErrors(results.errors.map((err) => err.message));
+            console.error('Papa.parse errors:', results.errors);
+            setErrors(results.errors.map(err => err.message));
             setLoading(false);
             return;
           }
+
+          console.log('Processing CSV data...');
+          const processed = processCSVData(results, fileType);
+          console.log('CSV data processed:', processed);
           
-          // Find the first header row
-          let headerRowIndex = -1;
-          for (let i = 0; i < results.data.length; i++) {
-            const row = results.data[i];
-            if (row && row.length >= 2) {
-              const firstCol = row[0] ? row[0].toString().trim() : "";
-              const secondCol = row[1] ? row[1].toString().trim() : "";
-              
-              // Check if this looks like a header row
-              if (firstCol.toLowerCase().includes('bin') && 
-                  secondCol.toLowerCase().includes('sku')) {
-                headerRowIndex = i;
-                console.log('Found header row at index:', i, 'with columns:', row);
-                break;
-              }
-            }
-          }
-          
-          // Process the data first
-          const processedData = results.data
-            .slice(headerRowIndex + 1)
-            .filter(row => {
-              // Skip rows that look like headers
-              if (row && row.length >= 2) {
-                const firstCol = row[0] ? row[0].toString().trim() : "";
-                const secondCol = row[1] ? row[1].toString().trim() : "";
-                
-                // Skip if this looks like a header row
-                if (firstCol.toLowerCase().includes('bin') && 
-                    secondCol.toLowerCase().includes('sku')) {
-                  console.log('Skipping header-like row:', row);
-                  return false;
-                }
-              }
-              
-              // Keep rows with actual data
-              return row && row.some(cell => cell && cell.toString().trim() !== "");
-            })
-            .map((row) => {
-              const obj = {};
-              const headers = results.data[headerRowIndex].map(h => (h || "").toString().trim());
-              headers.forEach((header, index) => {
-                obj[header] = row[index] ? row[index].toString().trim() : "";
-              });
-              return obj;
-            })
-            .filter((row) => {
-              // Check for SKU value
-              const skuValue = row['SKU ID'] || row['SKU'];
-              return skuValue && skuValue !== "";
-            });
-          
-          // Show preview modal for confirmation
           setPreviewModal({
             isOpen: true,
-            fileType: "Put Away",
-            processedData: processedData,
+            fileType: fileType === 'purchaseOrder' ? "Purchase Order" : 
+                      fileType === 'putAway' ? "Put Away" : "QC Fail",
+            processedData: processed.data,
             rawData: results.data,
-            detectedHeaders: headerRowIndex >= 0 ? {
-              rowIndex: headerRowIndex,
-              headers: results.data[headerRowIndex].map(h => (h || "").toString().trim())
-            } : null,
+            detectedHeaders: {
+              rowIndex: findHeaderRow(results.data, fileType),
+              headers: processed.headers
+            },
             onConfirm: (selectedData) => {
-              processPutAwayData(selectedData);
+              console.log('Modal confirmed with data:', selectedData);
+              processFileData(selectedData, fileType);
               setPreviewModal(prev => ({ ...prev, isOpen: false }));
             }
           });
 
           setLoading(false);
         } catch (error) {
-          console.error('Error processing Put Away sheet:', error);
-          setErrors([`Error processing Put Away sheet: ${error.message}`]);
+          console.error(`Error processing ${fileType}:`, error);
+          setErrors([`Error processing ${fileType}: ${error.message}`]);
           setLoading(false);
         }
       },
       error: (error) => {
-        console.error('Papa Parse error:', error);
+        console.error('Papa.parse error:', error);
         setErrors([`File parsing error: ${error.message}`]);
         setLoading(false);
       },
     });
   }, []);
 
-  const processPutAwayData = (selectedData) => {
-    const { headers, data } = selectedData;
+  const processFileData = (selectedData, fileType) => {
+    console.log(`Processing file data for ${fileType}:`, selectedData);
     
-    const cleanData = data
-      .filter(row => {
-        // Skip rows that look like headers
-        if (row && row.length >= 2) {
-          const firstCol = row[0] ? row[0].toString().trim() : "";
-          const secondCol = row[1] ? row[1].toString().trim() : "";
-          
-          // Skip if this looks like a header row
-          if (firstCol.toLowerCase().includes('bin') && 
-              secondCol.toLowerCase().includes('sku')) {
-            console.log('Skipping header-like row:', row);
-            return false;
-          }
-        }
-        
-        // Keep rows with actual data
-        return row && row.some(cell => cell && cell.toString().trim() !== "");
-      })
-      .map((row) => {
-        const obj = {};
-        headers.forEach((header, index) => {
-          obj[header] = row[index] ? row[index].toString().trim() : "";
-        });
-        return obj;
-      })
-      .filter((row) => {
-        // Check for SKU value
-        const skuValue = row['SKU ID'] || row['SKU'];
-        return skuValue && skuValue !== "";
-      });
-    
-    console.log('Put Away data loaded:', cleanData.length, 'rows');
-    console.log('Sample row:', cleanData[0]);
-    console.log('Setting putAwayData state with', cleanData.length, 'rows');
-    
-    setPutAwayData(cleanData);
-    console.log('Put Away upload completed successfully');
-  };
+    // Handle the case where selectedData might be null (modal cancelled)
+    if (!selectedData) {
+      console.log('Modal was cancelled, no data to process');
+      return;
+    }
 
-  const handleQCFailUpload = useCallback((file) => {
-    setLoading(true);
-    setErrors([]);
-
-    Papa.parse(file, {
-      header: true,
-      dynamicTyping: false,
-      skipEmptyLines: true,
-      complete: (results) => {
-        try {
-          if (results.errors.length > 0) {
-            setErrors(results.errors.map((err) => err.message));
-            setLoading(false);
-            return;
-          }
-          const cleanData = results.data
-            .map((row) => {
-              const cleanRow = {};
-              Object.keys(row).forEach((key) => {
-                const cleanKey = key.trim();
-                cleanRow[cleanKey] = row[key] ? row[key].toString().trim() : "";
-              });
-              return cleanRow;
-            })
-            .filter((row) => row.SKU && row.SKU !== "");
-          setQcFailData(cleanData);
-          setLoading(false);
-        } catch (error) {
-          setErrors([`Error processing QC Fail sheet: ${error.message}`]);
-          setLoading(false);
-        }
-      },
-      error: (error) => {
-        setErrors([`File parsing error: ${error.message}`]);
-        setLoading(false);
-      },
+    const { headers, data: modalData, grnHeaderInfo: selectedHeaderInfo } = selectedData;
+    console.log('Extracted data:', { 
+      headers, 
+      modalDataLength: modalData?.length, 
+      selectedHeaderInfo,
+      firstRow: modalData?.[0],
+      isArray: Array.isArray(modalData),
+      isObject: modalData?.[0] && typeof modalData[0] === 'object' && !Array.isArray(modalData[0])
     });
-  }, []);
-
-  const clearPurchaseOrder = useCallback(() => {
-    setPurchaseOrderData([]);
-    setGrnHeaderInfo((prev) => ({ ...prev, poNumber: "", brandName: "" }));
-  }, []);
-
-  const clearPutAway = useCallback(() => {
-    setPutAwayData([]);
-  }, []);
-
-  const clearQCFail = useCallback(() => {
-    setQcFailData([]);
-  }, []);
-
-  const closePreviewModal = useCallback(() => {
-    setPreviewModal(prev => ({ ...prev, isOpen: false }));
-  }, []);
-
-  const handleModalConfirm = (modalData) => {
-    const { headers, data, grnHeaderInfo, columnMapping, skuCodeType } = modalData;
     
-    // Update GRN header information if provided
-    if (grnHeaderInfo) {
+    // Update GRN header info if available
+    if (selectedHeaderInfo) {
       setGrnHeaderInfo(prev => ({
         ...prev,
-        poNumber: grnHeaderInfo.poNumber?.value || prev.poNumber,
-        brandName: grnHeaderInfo.brandName?.value || prev.brandName
+        poNumber: selectedHeaderInfo.poNumber?.value || prev.poNumber,
+        brandName: selectedHeaderInfo.brandName?.value || prev.brandName,
+        replenishmentNumber: selectedHeaderInfo.replenishmentNumber?.value || "",
+        inwardDate: selectedHeaderInfo.inwardDate?.value || "",
+        warehouseNo: selectedHeaderInfo.warehouseNo?.value || "",
+        verifiedBy: selectedHeaderInfo.verifiedBy?.value || "",
+        warehouseManagerName: selectedHeaderInfo.warehouseManagerName?.value || ""
       }));
     }
-
-    // Store the processed data and column mapping based on file type
-    if (previewModal.fileType === "Purchase Order") {
-      setPurchaseOrderData(data);
-      setColumnMapping(columnMapping || {});
-      // Update SKU code type if provided
-      if (skuCodeType) {
-        // We'll need to pass this back to the parent component
-        // For now, we'll store it in the modal state
-        setPreviewModal(prev => ({ ...prev, skuCodeType }));
-      }
-    } else if (previewModal.fileType === "Put Away") {
-      setPutAwayData(data);
-    }
     
-    // Close the modal
-    setPreviewModal(prev => ({ ...prev, isOpen: false }));
+    const processedData = modalData
+      .filter(row => {
+        // Check if row has any non-empty values (row is already an object, not an array)
+        return Object.values(row).some(value => value && value.toString().trim() !== "");
+      })
+      .map(row => {
+        // Clean up the data by trimming strings (row is already an object)
+        const cleanedRow = {};
+        Object.keys(row).forEach(key => {
+          const value = row[key];
+          cleanedRow[key] = typeof value === 'string' ? value.trim() : value;
+        });
+        return cleanedRow;
+      })
+      .filter(obj => {
+        if (fileType === 'purchaseOrder') {
+          return obj["Sno"] && obj["Sno"] !== "";
+        }
+        // For putAway and qcFail, allow all rows after header
+        return Object.values(obj).some(val => val && val !== "");
+      });
+    
+    console.log(`Final processed data for ${fileType}:`, processedData.length, 'rows');
+    setData(prev => ({ ...prev, [fileType]: processedData }));
   };
 
-  const setSkuCodeType = useCallback((newSkuCodeType) => {
-    setPreviewModal(prev => ({ ...prev, skuCodeType: newSkuCodeType }));
+  const handlePurchaseOrderUpload = useCallback((file) => {
+    handleFileUpload(file, 'purchaseOrder');
+  }, [handleFileUpload]);
+
+  const handlePutAwayUpload = useCallback((file) => {
+    handleFileUpload(file, 'putAway');
+  }, [handleFileUpload]);
+
+  const handleQcFailUpload = useCallback((file) => {
+    handleFileUpload(file, 'qcFail');
+  }, [handleFileUpload]);
+
+  const clearData = useCallback((fileType) => {
+    if (fileType) {
+      setData(prev => ({ ...prev, [fileType]: [] }));
+    } else {
+      setData({ purchaseOrder: [], putAway: [], qcFail: [] });
+    }
+    setErrors([]);
+  }, []);
+
+  const clearAllData = useCallback(() => {
+    setData({ purchaseOrder: [], putAway: [], qcFail: [] });
+    setGrnHeaderInfo({ poNumber: "", brandName: "" });
+    setColumnMapping({});
+    setErrors([]);
   }, []);
 
   return {
-    purchaseOrderData,
-    putAwayData,
-    qcFailData,
+    data,
     loading,
     errors,
     grnHeaderInfo,
+    setGrnHeaderInfo,
     columnMapping,
-    skuCodeType: previewModal.skuCodeType || "KNOT",
-    setSkuCodeType,
+    setColumnMapping,
     previewModal,
+    setPreviewModal,
     handlePurchaseOrderUpload,
     handlePutAwayUpload,
-    handleQCFailUpload,
-    clearPurchaseOrder,
-    clearPutAway,
-    clearQCFail,
-    closePreviewModal,
-    handleModalConfirm,
+    handleQcFailUpload,
+    clearData,
+    clearAllData
   };
 }; 

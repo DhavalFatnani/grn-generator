@@ -1,7 +1,7 @@
 import React from 'react';
+import { TEST_DATA_TEMPLATES } from '../utils/constants';
 
-export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, settings }) => {
-
+export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setPreviousValues, testMode }) => {
   console.log("HeaderForm: grnHeaderInfo.qcDoneBy", grnHeaderInfo.qcDoneBy);
 
   const handleMultiSelectChange = (e) => {
@@ -10,7 +10,7 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
     if (value && !grnHeaderInfo[name].includes(value)) {
       const newValues = [...grnHeaderInfo[name], value].sort();
       console.log("handleMultiSelectChange: newValues", newValues);
-      handleHeaderChange({ target: { name, value: newValues } });
+      onHeaderChange({ target: { name, value: newValues } });
     }
   };
 
@@ -21,7 +21,7 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
       if (value && !grnHeaderInfo.qcDoneBy.includes(value)) {
         const newValues = [...grnHeaderInfo.qcDoneBy, value].sort();
         console.log("handleMultiInputAdd: newValues", newValues);
-        handleHeaderChange({ target: { name: 'qcDoneBy', value: newValues } });
+        onHeaderChange({ target: { name: 'qcDoneBy', value: newValues } });
       }
       e.target.value = ''; // Clear input
     }
@@ -31,7 +31,7 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
     console.log("handleRemoveTag: personToRemove", personToRemove);
     const newValues = grnHeaderInfo.qcDoneBy.filter(person => person !== personToRemove);
     console.log("handleRemoveTag: newValues", newValues);
-    handleHeaderChange({ target: { name: 'qcDoneBy', value: newValues } });
+    onHeaderChange({ target: { name: 'qcDoneBy', value: newValues } });
   };
 
   const handleSingleInputAndAddToPrevious = (e, previousValuesArrayName) => {
@@ -39,14 +39,17 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
     console.log(`handleSingleInputAndAddToPrevious: name=${name}, value=${value}`);
     
     // Immediately update grnHeaderInfo for the current input/select value
-    handleHeaderChange({ target: { name, value } }); 
+    onHeaderChange({ target: { name, value } }); 
 
     // Add to previousValues if new and not empty, and only if it's a direct input from the text field (not from select)
     if (e.type === 'blur' || e.key === 'Enter') { // Only add on blur or Enter for text inputs
       if (value.trim() && !previousValues[previousValuesArrayName].includes(value.trim())) {
         const newPreviousValues = [...previousValues[previousValuesArrayName], value.trim()].sort();
         console.log(`handleSingleInputAndAddToPrevious: Adding to previousValues for ${previousValuesArrayName}:`, newPreviousValues);
-        handleHeaderChange({ target: { name: previousValuesArrayName, value: newPreviousValues } });
+        setPreviousValues(prev => ({
+          ...prev,
+          [previousValuesArrayName]: newPreviousValues
+        }));
       }
     }
   };
@@ -57,17 +60,90 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
     
     // If QC is not performed, clear the QC Done By field
     if (!checked) {
-      handleHeaderChange({ target: { name: 'qcDoneBy', value: [] } });
+      onHeaderChange({ target: { name: 'qcDoneBy', value: [] } });
     }
     
     // Update the QC performed flag
-    handleHeaderChange({ target: { name: 'qcPerformed', value: checked } });
+    onHeaderChange({ target: { name: 'qcPerformed', value: checked } });
+  };
+
+  const handleTestDataTemplate = (templateName) => {
+    const template = TEST_DATA_TEMPLATES[templateName];
+    if (template) {
+      console.log(`Loading test data template: ${templateName}`, template);
+      
+      // Update GRN header info
+      Object.entries(template.grnHeaderInfo).forEach(([key, value]) => {
+        onHeaderChange({ target: { name: key, value } });
+      });
+      
+      // Update previous values
+      setPreviousValues(template.previousValues);
+    }
+  };
+
+  const handleClearForm = () => {
+    console.log('Clearing form data');
+    
+    // Clear all GRN header fields
+    const fieldsToClear = [
+      'poNumber', 'brandName', 'replenishmentNumber', 'inwardDate', 
+      'warehouseNo', 'verifiedBy', 'warehouseManagerName', 'qcPerformed', 'qcDoneBy'
+    ];
+    
+    fieldsToClear.forEach(field => {
+      const value = field === 'qcDoneBy' ? [] : field === 'qcPerformed' ? false : '';
+      onHeaderChange({ target: { name: field, value } });
+    });
+    
+    // Reset previous values to defaults
+    setPreviousValues({
+      warehouseNos: ["WH-MUM-01"],
+      qcPersons: ["Abhishek", "LuvKush", "Sandeep", "Kuldeep", "Suraj", "Krish"],
+      supervisors: ["Noorul Sheikh", "Preetam Yadav"],
+      warehouseManagers: ["Shoeb Sheikh"],
+    });
   };
 
   return (
     <div className="p-6 rounded-lg bg-white border border-gray-200 shadow-sm">
+      {testMode && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+          <div className="flex items-center">
+            <span className="text-yellow-800 text-sm font-medium">🧪 Test Mode Active</span>
+            <span className="text-yellow-600 text-sm ml-2">Using sample data for testing</span>
+          </div>
+        </div>
+      )}
+      
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-2">GRN Header Information</h2>
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-xl font-semibold text-gray-800">GRN Header Information</h2>
+          {testMode && (
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-500">Quick Fill:</span>
+                <select
+                  onChange={(e) => handleTestDataTemplate(e.target.value)}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  defaultValue=""
+                >
+                  <option value="">Select Template</option>
+                  <option value="standard">Standard GRN (QC Performed)</option>
+                  <option value="noQC">No QC Performed</option>
+                  <option value="alternative">Alternative Brand</option>
+                  <option value="minimal">Minimal Data</option>
+                </select>
+              </div>
+              <button
+                onClick={handleClearForm}
+                className="px-3 py-1 text-sm text-red-600 border border-red-300 rounded-md hover:bg-red-50 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+              >
+                Clear Form
+              </button>
+            </div>
+          )}
+        </div>
         <p className="text-sm text-gray-600">
           Please verify and complete the following information. Fields marked with <span className="text-blue-500">*</span> are required.
         </p>
@@ -84,7 +160,7 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
             <input
               type="text"
               value={grnHeaderInfo.replenishmentNumber}
-              onChange={handleHeaderChange}
+              onChange={onHeaderChange}
               name="replenishmentNumber"
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               placeholder="e.g., REP-001"
@@ -99,7 +175,7 @@ export const HeaderForm = ({ grnHeaderInfo, handleHeaderChange, previousValues, 
               <input
                 type="date"
                 value={grnHeaderInfo.inwardDate}
-                onChange={handleHeaderChange}
+                onChange={onHeaderChange}
                 name="inwardDate"
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer"
                 required

@@ -191,8 +191,13 @@ class GRNExporter {
     headers.push("Status", "Remarks");
 
     // Helper function to generate remarks
-    function generateRemarks(item) {
+    const generateRemarks = (item) => {
       const remarks = [];
+      // Guard for missing grnHeaderInfo
+      if (!this || !this.grnHeaderInfo) {
+        remarks.push("Data incomplete");
+        return remarks.join(" | ");
+      }
       
       // Check for shortage - either by quantity or status
       if ((item["Shortage Qty"] || 0) > 0 || item.Status === "Shortage" || item.Status === "Shortage & QC Failed") {
@@ -249,7 +254,7 @@ class GRNExporter {
       }
       
       return remarks.join(" | ");
-    }
+    };
 
     const dataRows = this.grnData.map((item, index) => {
       const row = [
@@ -579,7 +584,7 @@ class GRNExporter {
         background: var(--gray-100);
         color: var(--gray-600);
         border: 1px solid var(--gray-300);
-      }
+    }
 
     .main-grid {
       display: grid;
@@ -971,13 +976,13 @@ class GRNExporter {
         <div class="summary-card">
             <div class="summary-value">${summaryStats.totalReceivedUnits}</div>
             <div class="summary-label">Received Units</div>
-            <div class="summary-subtext">
+          <div class="summary-subtext">
               ${this.grnHeaderInfo.qcPerformed ? `
                 <strong>${summaryStats.totalQcPassedUnits}</strong> QC Pass<br>
                 <strong>${summaryStats.totalQcFailedUnits}</strong> QC Fail
               ` : ''}
-            </div>
           </div>
+        </div>
           ${this.grnHeaderInfo.qcPerformed ? `
         <div class="summary-card">
               <div class="summary-value">${summaryStats.totalQcPassedUnits}</div>
@@ -1127,6 +1132,11 @@ class GRNExporter {
 
   generateRemarks(item) {
     const remarks = [];
+    // Guard for missing grnHeaderInfo
+    if (!this || !this.grnHeaderInfo) {
+      remarks.push("Data incomplete");
+      return remarks.join(" | ");
+    }
     
     // Check for shortage - either by quantity or status
     if ((item["Shortage Qty"] || 0) > 0 || item.Status === "Shortage" || item.Status === "Shortage & QC Failed") {
@@ -1296,6 +1306,11 @@ class GRNExporter {
         // Helper function to generate remarks
         function generateRemarks(item) {
           const remarks = [];
+          // Guard for missing grnHeaderInfo
+          if (!this || !this.grnHeaderInfo) {
+            remarks.push("Data incomplete");
+            return remarks.join(" | ");
+          }
           
           // Check for shortage - either by quantity or status
           if ((item["Shortage Qty"] || 0) > 0 || item.Status === "Shortage" || item.Status === "Shortage & QC Failed") {

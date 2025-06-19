@@ -38,8 +38,28 @@ export const DataPreviewModal = ({
   const [selectionMode, setSelectionMode] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
 
+  // Debug logging when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      console.log('DataPreviewModal: Modal opened with props', {
+        isOpen,
+        fileType,
+        processedDataLength: processedData?.length,
+        detectedHeaders,
+        rawDataLength: rawData?.length,
+        skuCodeType
+      });
+    }
+  }, [isOpen, fileType, processedData, detectedHeaders, rawData, skuCodeType]);
+
   useEffect(() => {
     if (processedData && processedData.length > 0) {
+      console.log('DataPreviewModal: Processing data for modal', {
+        processedDataLength: processedData.length,
+        firstRow: processedData[0],
+        fileType
+      });
+      
       // Get headers from the first row of processed data
       const headers = Object.keys(processedData[0]);
       setCustomHeaders([{
@@ -77,6 +97,13 @@ export const DataPreviewModal = ({
       
       // Set preview data to first 10 rows
       setPreviewData(processedData.slice(0, 10));
+      
+      console.log('DataPreviewModal: Modal data initialized', {
+        customHeadersLength: 1,
+        headers,
+        autoMapping,
+        previewDataLength: Math.min(processedData.length, 10)
+      });
     }
   }, [processedData]);
 
@@ -163,14 +190,43 @@ export const DataPreviewModal = ({
   };
 
   const handleConfirm = () => {
-    if (customHeaders.length > 0 && selectedHeaderRow < customHeaders.length) {
+    console.log('handleConfirm called', {
+      customHeadersLength: customHeaders.length,
+      selectedHeaderRow,
+      processedDataLength: processedData?.length,
+      columnMapping,
+      grnHeaderSelections,
+      skuCodeType
+    });
+
+    // Check if we have processed data and headers
+    if (processedData && processedData.length > 0 && customHeaders.length > 0) {
       const selectedHeaderInfo = customHeaders[selectedHeaderRow];
-      onConfirm({
-        headers: selectedHeaderInfo.headers,
-        data: processedData,
-        grnHeaderInfo: grnHeaderSelections,
-        columnMapping: columnMapping,
-        skuCodeType: skuCodeType
+      
+      if (selectedHeaderInfo && selectedHeaderInfo.headers) {
+        console.log('Confirming with data:', {
+          headers: selectedHeaderInfo.headers,
+          dataLength: processedData.length,
+          grnHeaderInfo: grnHeaderSelections,
+          columnMapping: columnMapping,
+          skuCodeType: skuCodeType
+        });
+
+        onConfirm({
+          headers: selectedHeaderInfo.headers,
+          data: processedData,
+          grnHeaderInfo: grnHeaderSelections,
+          columnMapping: columnMapping,
+          skuCodeType: skuCodeType
+        });
+      } else {
+        console.error('No valid header info found');
+      }
+    } else {
+      console.error('Cannot confirm: missing processed data or headers', {
+        hasProcessedData: !!processedData,
+        processedDataLength: processedData?.length,
+        customHeadersLength: customHeaders.length
       });
     }
   };
@@ -423,7 +479,7 @@ export const DataPreviewModal = ({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={customHeaders.length === 0}
+            disabled={!processedData || processedData.length === 0 || customHeaders.length === 0}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Confirm Mapping

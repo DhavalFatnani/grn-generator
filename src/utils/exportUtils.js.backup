@@ -1,0 +1,396 @@
+// Compressed GRN Export Utilities
+import { calculateSummaryStats, calculateIssueSummary, generateRemarks } from './calculations.js';
+import { CSV_HEADERS, QC_STATUS_CLASSES } from './constants.js';
+
+// CSV Export
+export const downloadCSV = (grnData, grnHeaderInfo) => {
+  const summaryStats = calculateSummaryStats(grnData);
+  const today = new Date();
+  const documentNumber = generateDocumentNumber(today, grnHeaderInfo);
+  
+  const metadata = [
+    ["Goods Received Note (GRN)"],
+    ["Document Number", documentNumber],
+    ["Generated Date", today.toLocaleDateString("en-GB")],
+    ["Generated Time", today.toLocaleTimeString()],
+    [],
+    ["Order Information"],
+    ["PO Number", grnHeaderInfo.poNumber],
+    ["Vendor/Brand", grnHeaderInfo.brandName],
+    ["Replenishment Number", grnHeaderInfo.replenishmentNumber],
+    [],
+    ["Receipt Information"],
+    ["Inward Date", grnHeaderInfo.inwardDate],
+    ["Warehouse", grnHeaderInfo.warehouseNo],
+    ["Receipt Accuracy", summaryStats.receiptAccuracy + "%"],
+    [],
+    ["Summary Statistics"],
+    ["Total Ordered Units", summaryStats.totalOrderedUnits],
+    ["Total Received Units", summaryStats.totalReceivedUnits],
+    ["Total Shortage Units", summaryStats.totalShortageUnits],
+    ["Total Excess Units", summaryStats.totalExcessUnits],
+    ["Total Not Ordered Units", summaryStats.totalNotOrderedUnits]
+  ];
+  
+  if (grnHeaderInfo.qcPerformed) {
+    metadata.push(
+      ["Total QC Passed Units", summaryStats.totalQcPassedUnits],
+      ["Total QC Failed Units", summaryStats.totalQcFailedUnits],
+      ["QC Pass Rate", summaryStats.qcPassRate + "%"]
+    );
+  }
+  
+  metadata.push([], []);
+  
+  const headers = [...CSV_HEADERS.basic];
+  if (grnHeaderInfo.qcPerformed) headers.push(...CSV_HEADERS.withQC);
+  headers.push(...CSV_HEADERS.common);
+  
+  const dataRows = grnData.map((item, index) => {
+    const row = [
+      index + 1, item["Brand SKU"] || "", item["KNOT SKU"] || "", item["Size"] || "",
+      item["Color"] || "", item["Ordered Qty"] || 0, item["Received Qty"] || 0
+    ];
+    
+    if (grnHeaderInfo.qcPerformed) {
+      row.push(item["Passed QC Qty"] || 0, item["Failed QC Qty"] || 0, item["QC Status"] || "");
+    }
+    
+    row.push(
+      item["Shortage Qty"] || 0, item["Excess Qty"] || 0, item["Status"] || "",
+      item["Remarks"] || generateRemarks(item)
+    );
+    
+    return row;
+  });
+  
+  const allRows = [...metadata, headers, ...dataRows];
+  const csvContent = convertToCSVString(allRows);
+  
+  downloadFile(csvContent, `GRN-${grnHeaderInfo.brandName}-${grnHeaderInfo.replenishmentNumber}.csv`, 'text/csv');
+};
+
+// HTML Export
+export const downloadHTML = (grnData, grnHeaderInfo) => {
+  const summaryStats = calculateSummaryStats(grnData);
+  const issueSummary = calculateIssueSummary(grnData);
+  const today = new Date();
+  const documentNumber = generateDocumentNumber(today, grnHeaderInfo);
+  
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRN Report - ${grnHeaderInfo.brandName}</title>
+    <style>${getStyles()}</style>
+</head>
+<body>
+    ${buildHeader(summaryStats, documentNumber, grnHeaderInfo)}
+    ${buildMainGrid(summaryStats, issueSummary, grnHeaderInfo)}
+    ${buildTable(grnData, grnHeaderInfo)}
+    ${buildFooter()}
+    ${buildExportActions()}
+    <script>${getScripts()}</script>
+</body>
+</html>`;
+  
+  downloadFile(html, `GRN-${grnHeaderInfo.brandName}-${grnHeaderInfo.replenishmentNumber}.html`, 'text/html');
+};
+
+// PDF Export (using print dialog for simplicity)
+export const downloadPDF = (grnData, grnHeaderInfo) => {
+  const summaryStats = calculateSummaryStats(grnData);
+  const issueSummary = calculateIssueSummary(grnData);
+  const today = new Date();
+  const documentNumber = generateDocumentNumber(today, grnHeaderInfo);
+  
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRN Report - ${grnHeaderInfo.brandName}</title>
+    <style>${getPrintStyles()}</style>
+</head>
+<body>
+    ${buildHeader(summaryStats, documentNumber, grnHeaderInfo)}
+    ${buildMainGrid(summaryStats, issueSummary, grnHeaderInfo)}
+    ${buildTable(grnData, grnHeaderInfo)}
+    ${buildFooter()}
+</body>
+</html>`;
+  
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const printWindow = window.open(url, '_blank');
+  printWindow.onload = () => printWindow.print();
+};
+
+// Utility Functions
+const generateDocumentNumber = (today, grnHeaderInfo) => {
+  const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+  return `GRN-KNOT-${dateStr}-${grnHeaderInfo.brandName.replace(/\s+/g, "")}-${grnHeaderInfo.replenishmentNumber}`;
+};
+
+const convertToCSVString = (lines) => {
+  const escapeCSV = (value) => {
+    if (value === null || value === undefined) return '""';
+    const stringValue = String(value);
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+  
+  return lines.map(row => 
+    row.map(cell => escapeCSV(cell)).join(',')
+  ).join('\n');
+};
+
+const downloadFile = (content, filename, mimeType) => {
+  const blob = new Blob([content], { type: mimeType + ';charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const getStyles = () => `
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+.header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+.header h1 { color: #2c3e50; font-size: 2.5em; margin-bottom: 10px; }
+.header .subtitle { color: #7f8c8d; font-size: 1.2em; }
+.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
+.info-card { background: #ecf0f1; padding: 20px; border-radius: 8px; border-left: 4px solid #3498db; }
+.info-card h3 { color: #2c3e50; margin-bottom: 15px; font-size: 1.3em; }
+.info-item { display: flex; justify-content: space-between; margin-bottom: 8px; padding: 5px 0; }
+.info-item:not(:last-child) { border-bottom: 1px solid #bdc3c7; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 30px; }
+.summary-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; text-align: center; }
+.summary-card h3 { font-size: 1.1em; margin-bottom: 10px; opacity: 0.9; }
+.summary-card .value { font-size: 2em; font-weight: bold; margin-bottom: 5px; }
+.summary-card .label { font-size: 0.9em; opacity: 0.8; }
+.table-container { overflow-x: auto; margin-bottom: 30px; }
+table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+th { background: #34495e; color: white; font-weight: 600; position: sticky; top: 0; }
+tr:nth-child(even) { background: #f8f9fa; }
+tr:hover { background: #e3f2fd; }
+.status-complete { color: #27ae60; font-weight: 600; }
+.status-shortage { color: #e67e22; font-weight: 600; }
+.status-excess { color: #3498db; font-weight: 600; }
+.status-not-received { color: #e74c3c; font-weight: 600; }
+.status-not-ordered { color: #9b59b6; font-weight: 600; }
+.qc-passed { color: #27ae60; font-weight: 600; }
+.qc-failed { color: #e74c3c; font-weight: 600; }
+.qc-partial { color: #f39c12; font-weight: 600; }
+.qc-not-performed { color: #95a5a6; font-style: italic; }
+.footer { text-align: center; margin-top: 30px; padding: 20px; background: #2c3e50; color: white; border-radius: 8px; }
+.export-actions { text-align: center; margin: 20px 0; }
+.btn { display: inline-block; padding: 12px 24px; margin: 0 10px; background: #3498db; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; transition: background 0.3s; }
+.btn:hover { background: #2980b9; }
+.btn-success { background: #27ae60; }
+.btn-success:hover { background: #229954; }
+.btn-danger { background: #e74c3c; }
+.btn-danger:hover { background: #c0392b; }
+@media print { .export-actions { display: none; } body { background: white; } .container { box-shadow: none; } }
+`;
+
+const getPrintStyles = () => `
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: white; }
+.header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; }
+.header h1 { color: #2c3e50; font-size: 2em; margin-bottom: 8px; }
+.header .subtitle { color: #7f8c8d; font-size: 1em; }
+.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px; }
+.info-card { background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 3px solid #3498db; }
+.info-card h3 { color: #2c3e50; margin-bottom: 10px; font-size: 1.1em; }
+.info-item { display: flex; justify-content: space-between; margin-bottom: 5px; padding: 3px 0; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.summary-card { background: #34495e; color: white; padding: 15px; border-radius: 8px; text-align: center; }
+.summary-card h3 { font-size: 0.9em; margin-bottom: 8px; }
+.summary-card .value { font-size: 1.5em; font-weight: bold; margin-bottom: 3px; }
+.summary-card .label { font-size: 0.8em; opacity: 0.8; }
+.table-container { margin-bottom: 20px; }
+table { width: 100%; border-collapse: collapse; background: white; }
+th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; font-size: 0.9em; }
+th { background: #34495e; color: white; font-weight: 600; }
+tr:nth-child(even) { background: #f8f9fa; }
+.footer { text-align: center; margin-top: 20px; padding: 15px; background: #2c3e50; color: white; border-radius: 5px; }
+@media print { body { background: white; } }
+`;
+
+const buildHeader = (summaryStats, documentNumber, grnHeaderInfo) => `
+<div class="header">
+    <h1>Goods Received Note (GRN)</h1>
+    <div class="subtitle">Document Number: ${documentNumber}</div>
+    <div class="subtitle">Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</div>
+</div>
+<div class="info-grid">
+    <div class="info-card">
+        <h3>Order Information</h3>
+        <div class="info-item"><span>PO Number:</span><span>${grnHeaderInfo.poNumber}</span></div>
+        <div class="info-item"><span>Vendor/Brand:</span><span>${grnHeaderInfo.brandName}</span></div>
+        <div class="info-item"><span>Replenishment Number:</span><span>${grnHeaderInfo.replenishmentNumber}</span></div>
+    </div>
+    <div class="info-card">
+        <h3>Receipt Information</h3>
+        <div class="info-item"><span>Inward Date:</span><span>${grnHeaderInfo.inwardDate}</span></div>
+        <div class="info-item"><span>Warehouse:</span><span>${grnHeaderInfo.warehouseNo}</span></div>
+        <div class="info-item"><span>Receipt Accuracy:</span><span>${summaryStats.receiptAccuracy}%</span></div>
+    </div>
+</div>`;
+
+const buildMainGrid = (summaryStats, issueSummary, grnHeaderInfo) => {
+  const cards = [
+    { title: "Total Items", value: summaryStats.totalItems, label: "Items Processed" },
+    { title: "Ordered Units", value: summaryStats.totalOrderedUnits, label: "Units Ordered" },
+    { title: "Received Units", value: summaryStats.totalReceivedUnits, label: "Units Received" },
+    { title: "Shortage Units", value: summaryStats.totalShortageUnits, label: "Units Short" },
+    { title: "Excess Units", value: summaryStats.totalExcessUnits, label: "Units Excess" },
+    { title: "Not Ordered", value: summaryStats.totalNotOrderedUnits, label: "Units Not Ordered" }
+  ];
+  
+  if (grnHeaderInfo.qcPerformed) {
+    cards.push(
+      { title: "QC Passed", value: summaryStats.totalQcPassedUnits, label: "Units Passed QC" },
+      { title: "QC Failed", value: summaryStats.totalQcFailedUnits, label: "Units Failed QC" },
+      { title: "QC Pass Rate", value: `${summaryStats.qcPassRate}%`, label: "QC Success Rate" }
+    );
+  }
+  
+  const issueCards = [
+    { title: "QC Only Issues", value: issueSummary.onlyQCFailed, label: "Items with QC Issues Only" },
+    { title: "Quantity Only Issues", value: issueSummary.onlyQuantityIssues, label: "Items with Quantity Issues Only" },
+    { title: "Both Issues", value: issueSummary.withBothIssues, label: "Items with Both Issues" }
+  ];
+  
+  return `
+<div class="summary-grid">
+    ${cards.map(card => `
+        <div class="summary-card">
+            <h3>${card.title}</h3>
+            <div class="value">${card.value}</div>
+            <div class="label">${card.label}</div>
+        </div>
+    `).join('')}
+</div>
+<div class="summary-grid">
+    ${issueCards.map(card => `
+        <div class="summary-card">
+            <h3>${card.title}</h3>
+            <div class="value">${card.value}</div>
+            <div class="label">${card.label}</div>
+        </div>
+    `).join('')}
+</div>`;
+};
+
+const buildTable = (grnData, grnHeaderInfo) => {
+  const headers = ['S.No', 'Brand SKU', 'KNOT SKU', 'Size', 'Color', 'Ordered Qty', 'Received Qty'];
+  if (grnHeaderInfo.qcPerformed) {
+    headers.push('Passed QC Qty', 'Failed QC Qty', 'QC Status');
+  }
+  headers.push('Shortage Qty', 'Excess Qty', 'Status', 'Remarks');
+  
+  return `
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+            ${grnData.map((item, index) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${item["Brand SKU"] || ""}</td>
+                    <td>${item["KNOT SKU"] || ""}</td>
+                    <td>${item["Size"] || ""}</td>
+                    <td>${item["Color"] || ""}</td>
+                    <td>${item["Ordered Qty"] || 0}</td>
+                    <td>${item["Received Qty"] || 0}</td>
+                    ${grnHeaderInfo.qcPerformed ? `
+                        <td>${item["Passed QC Qty"] || 0}</td>
+                        <td>${item["Failed QC Qty"] || 0}</td>
+                        <td class="${QC_STATUS_CLASSES[item["QC Status"]] || ''}">${item["QC Status"] || ""}</td>
+                    ` : ''}
+                    <td>${item["Shortage Qty"] || 0}</td>
+                    <td>${item["Excess Qty"] || 0}</td>
+                    <td class="status-${(item.Status || "").toLowerCase().replace(/\s+/g, '-')}">${item.Status || ""}</td>
+                    <td>${item["Remarks"] || generateRemarks(item)}</td>
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+</div>`;
+};
+
+const buildFooter = () => `
+<div class="footer">
+    <p>This report was generated automatically by the GRN Generator System</p>
+    <p>For any discrepancies, please contact the warehouse management team</p>
+</div>`;
+
+const buildExportActions = () => `
+<div class="export-actions">
+    <button class="btn btn-success" onclick="downloadCSV()">Download CSV</button>
+    <button class="btn btn-danger" onclick="downloadPDF()">Download PDF</button>
+    <button class="btn" onclick="window.print()">Print Report</button>
+</div>`;
+
+const getScripts = () => `
+function downloadCSV() {
+    const csvContent = generateCSVContent();
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'GRN-Report.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function generateCSVContent() {
+    const headers = ['S.No', 'Brand SKU', 'KNOT SKU', 'Size', 'Color', 'Ordered Qty', 'Received Qty'];
+    if (window.grnHeaderInfo && window.grnHeaderInfo.qcPerformed) {
+        headers.push('Passed QC Qty', 'Failed QC Qty', 'QC Status');
+    }
+    headers.push('Shortage Qty', 'Excess Qty', 'Status', 'Remarks');
+    
+    const rows = [headers];
+    window.grnData.forEach((item, index) => {
+        const row = [index + 1, item["Brand SKU"] || "", item["KNOT SKU"] || "", item["Size"] || "", 
+                    item["Color"] || "", item["Ordered Qty"] || 0, item["Received Qty"] || 0];
+        if (window.grnHeaderInfo && window.grnHeaderInfo.qcPerformed) {
+            row.push(item["Passed QC Qty"] || 0, item["Failed QC Qty"] || 0, item["QC Status"] || "");
+        }
+        row.push(item["Shortage Qty"] || 0, item["Excess Qty"] || 0, item["Status"] || "", 
+                item["Remarks"] || generateRemarks(item));
+        rows.push(row);
+    });
+    
+    return rows.map(row => row.map(cell => \`"\${cell}"\`).join(',')).join('\\n');
+}
+
+function generateRemarks(item) {
+    const remarks = [];
+    if ((item["Shortage Qty"] || 0) > 0) remarks.push(\`Shortage of \${item["Shortage Qty"]} units\`);
+    if ((item["Excess Qty"] || 0) > 0) remarks.push(\`Excess of \${item["Excess Qty"]} units\`);
+    if ((item["Not Ordered Qty"] || 0) > 0) remarks.push(\`\${item["Not Ordered Qty"]} units not ordered\`);
+    if ((item["Failed QC Qty"] || 0) > 0) remarks.push(\`QC failed for \${item["Failed QC Qty"]} units\`);
+    if (item.Status === "Not Received") remarks.push("Items not received");
+    return remarks.length > 0 ? remarks.join("; ") : "All items received as ordered";
+}
+
+function downloadPDF() {
+    window.print();
+}`; 

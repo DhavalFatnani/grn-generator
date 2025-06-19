@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Upload Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .error { color: red; }
+        .success { color: green; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>CSV Upload Test</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Simple CSV Generation</h2>
+        <button onclick="testCSVGeneration()">Generate Test CSV</button>
+        <div id="csv-output"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: File Upload</h2>
+        <input type="file" id="fileInput" accept=".csv" onchange="handleFileUpload(event)">
+        <div id="upload-output"></div>
+    </div>
+
+    <script>
+        // Simple CSV generation test
+        function testCSVGeneration() {
+            const headers = ['Sno', 'SKU ID', 'KNOT SKU Code', 'Bin', 'Quantity'];
+            const data = [
+                ['1', 'MBTSSS0-001', 'W1-WBI-001', 'A1-B1-C1', '8'],
+                ['2', 'MBTSSS0-002', 'W1-WBI-002', 'A1-B1-C2', '12']
+            ];
+            
+            const csvContent = [
+                headers.join(','),
+                ...data.map(row => row.join(','))
+            ].join('\n');
+            
+            document.getElementById('csv-output').innerHTML = `
+                <h3>Generated CSV:</h3>
+                <pre>${csvContent}</pre>
+                <h3>Lines:</h3>
+                <pre>${JSON.stringify(csvContent.split('\n'), null, 2)}</pre>
+            `;
+        }
+
+        // File upload test
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const output = document.getElementById('upload-output');
+            output.innerHTML = '<p>Processing file...</p>';
+
+            Papa.parse(file, {
+                header: false,
+                dynamicTyping: false,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    console.log('Papa.parse results:', results);
+                    
+                    let html = '<h3>Parsed Data:</h3>';
+                    html += `<p>Data length: ${results.data.length}</p>`;
+                    html += '<h4>First 5 rows:</h4>';
+                    html += '<pre>' + JSON.stringify(results.data.slice(0, 5), null, 2) + '</pre>';
+                    
+                    // Check for sno header
+                    let snoFound = false;
+                    let snoRow = -1;
+                    
+                    for (let i = 0; i < results.data.length; i++) {
+                        const row = results.data[i];
+                        if (row && row.some(cell => cell && cell.toString().toLowerCase().includes('sno'))) {
+                            snoFound = true;
+                            snoRow = i;
+                            break;
+                        }
+                    }
+                    
+                    html += `<p><strong>Sno header found:</strong> ${snoFound} (row ${snoRow})</p>`;
+                    
+                    if (snoFound) {
+                        html += '<p class="success">✅ Sno header found successfully!</p>';
+                    } else {
+                        html += '<p class="error">❌ Sno header not found!</p>';
+                    }
+                    
+                    output.innerHTML = html;
+                },
+                error: (error) => {
+                    output.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+                }
+            });
+        }
+    </script>
+</body>
+</html> 
