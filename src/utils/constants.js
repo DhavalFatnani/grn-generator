@@ -195,7 +195,7 @@ export const FILE_VALIDATION = {
   allowedTypes: ['.csv', '.xlsx', '.xls'],
   requiredColumns: {
     purchaseOrder: ['Brand SKU Code', 'Quantity'],
-    putAway: ['SKU ID'],
+    putAway: ['SKU', 'BIN'],
     qcFail: ['SKU']
   }
 };

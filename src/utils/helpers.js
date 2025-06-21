@@ -254,7 +254,7 @@ export const generateSampleCSVData = (fileType) => {
     putAway: {
       // Matches the real Putaway file: simple two-column header, no extra metadata
       lines: [
-        'BIN LOCATION ,SKU ID',
+        'SKU,BIN',
         ',',
         ',',
         ',',

@@ -172,14 +172,14 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
               Inward Date <span className="text-blue-500">*</span>
             </label>
             <div className="relative">
-              <input
-                type="date"
-                value={grnHeaderInfo.inwardDate}
+            <input
+              type="date"
+              value={grnHeaderInfo.inwardDate}
                 onChange={onHeaderChange}
-                name="inwardDate"
+              name="inwardDate"
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer"
-                required
-              />
+              required
+            />
             </div>
           </div>
         </div>
@@ -315,53 +315,53 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
         <div className="grid md:grid-cols-2 gap-6">
           {/* QC Done By - Only show if QC is performed */}
           {grnHeaderInfo.qcPerformed && (
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
                 QC Done By
-              </label>
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-2 p-2 min-h-[2.5rem] border border-gray-300 rounded-md bg-white">
-                  {Array.isArray(grnHeaderInfo.qcDoneBy) && grnHeaderInfo.qcDoneBy.map((person) => (
-                    <span
-                      key={person}
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+            </label>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2 p-2 min-h-[2.5rem] border border-gray-300 rounded-md bg-white">
+                {Array.isArray(grnHeaderInfo.qcDoneBy) && grnHeaderInfo.qcDoneBy.map((person) => (
+                  <span
+                    key={person}
+                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+                  >
+                    {person}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(person)}
+                      className="ml-1.5 -mr-0.5 h-4 w-4 rounded-full inline-flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      {person}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(person)}
-                        className="ml-1.5 -mr-0.5 h-4 w-4 rounded-full inline-flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <select
-                  value=""
-                  onChange={handleMultiSelectChange}
-                  name="qcDoneBy"
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                >
-                  <option value="">Add from existing...</option>
-                  {previousValues.qcPersons
-                    .filter(person => !Array.isArray(grnHeaderInfo.qcDoneBy) || !grnHeaderInfo.qcDoneBy.includes(person))
-                    .map((person) => (
-                      <option key={person} value={person}>
-                        {person}
-                      </option>
-                    ))}
-                </select>
-                <input
-                  type="text"
-                  onBlur={handleMultiInputAdd}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleMultiInputAdd(e); }}
-                  name="qcDoneByInput"
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="Type new QC person name and press Enter/Tab"
-                />
+                      ×
+                    </button>
+                  </span>
+                ))}
               </div>
+              <select
+                value=""
+                onChange={handleMultiSelectChange}
+                name="qcDoneBy"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              >
+                <option value="">Add from existing...</option>
+                {previousValues.qcPersons
+                  .filter(person => !Array.isArray(grnHeaderInfo.qcDoneBy) || !grnHeaderInfo.qcDoneBy.includes(person))
+                  .map((person) => (
+                    <option key={person} value={person}>
+                      {person}
+                    </option>
+                  ))}
+              </select>
+              <input
+                type="text"
+                onBlur={handleMultiInputAdd}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleMultiInputAdd(e); }}
+                name="qcDoneByInput"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="Type new QC person name and press Enter/Tab"
+              />
             </div>
+          </div>
           )}
           
           <div>

@@ -95,12 +95,8 @@ export const useFileUpload = () => {
           return i;
         }
       } else if (fileType === 'putAway') {
-        if (row?.some(cell => {
-          const cellStr = cell?.toString().toLowerCase();
-          const isPutAwayHeader = cellStr.replace(/\s+/g, '').startsWith('binlocation') && row.length >= 2 && row[1]?.toString().toLowerCase().includes('sku');
-          console.log(`findHeaderRow: Cell "${cell}" -> "${cellStr}" -> isPutAwayHeader: ${isPutAwayHeader}`);
-          return isPutAwayHeader;
-        })) {
+        const lowerCaseRow = row?.map(cell => cell?.toString().toLowerCase().trim());
+        if (lowerCaseRow && lowerCaseRow.includes('sku') && lowerCaseRow.includes('bin')) {
           console.log(`findHeaderRow: Found putAway header row at index ${i}`);
           return i;
         }

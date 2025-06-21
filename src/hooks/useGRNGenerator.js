@@ -29,22 +29,22 @@ export const useGRNGenerator = () => {
       const validation = validateRequiredFields(grnHeaderInfo, REQUIRED_FIELDS);
       if (!validation.isValid) {
         setErrors([ERROR_MESSAGES.grnGeneration.missingFields]);
-        setLoading(false);
-        return;
-      }
+      setLoading(false);
+      return;
+    }
 
       // Validate data arrays
       if (!purchaseOrderData?.length) {
         setErrors(["Please upload a valid Purchase Order sheet"]);
-        setLoading(false);
-        return;
-      }
+      setLoading(false);
+      return;
+    }
 
       if (!putAwayData?.length) {
         setErrors(["Please upload a valid Put Away sheet"]);
-        setLoading(false);
-        return;
-      }
+      setLoading(false);
+      return;
+    }
 
       const qcFailDataArray = qcFailData || [];
 

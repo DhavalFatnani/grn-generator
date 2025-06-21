@@ -55,8 +55,8 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
         const brand = (item["Brand SKU Code"] || '').toString().toLowerCase();
         const knot = (item["KNOT SKU Code"] || '').toString().toLowerCase();
         if (!brand.includes(search.toLowerCase()) && !knot.includes(search.toLowerCase())) {
-          return false;
-        }
+            return false;
+          }
       }
       // Status filter
       if (activeFilters.status.length > 0) {
@@ -261,7 +261,7 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
         {(search || activeFilters.status.length > 0 || activeFilters.qcStatus.length > 0 || activeFilters.issueType.length > 0) && (
           <button onClick={handleClearAllFilters} className="ml-auto px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm font-medium border border-gray-300 transition-colors">Clear All</button>
         )}
-      </div>
+          </div>
       {/* Active Filter Chips */}
       {(search || activeFilters.status.length > 0 || activeFilters.qcStatus.length > 0 || activeFilters.issueType.length > 0) && (
         <div className="flex flex-wrap gap-2 mb-4 px-4">
@@ -330,8 +330,8 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
                     onMouseLeave={handleMouseLeave}
                   >
                     {item.Status}
-                  </span>
-                </td>
+                      </span>
+                    </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getQCStatusColor(item["QC Status"])}`}>{item["QC Status"]}</span>
                 </td>

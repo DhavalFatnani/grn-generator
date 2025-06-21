@@ -324,7 +324,7 @@ class GRNExporter {
   calculateOnlyQCFailed(summaryStats) {
     // Count items that have QC issues but no quantity issues
     return this.grnData.filter((item) => 
-      item["QC Status"] !== "Passed" && 
+        item["QC Status"] !== "Passed" && 
       item["QC Status"] !== "Not Performed" && 
       !["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)
     ).length;

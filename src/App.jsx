@@ -194,6 +194,18 @@ const GRNGenerator = () => {
             </div>
           </div>
 
+          {/* File Upload Guidelines section */}
+          <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">
+            <h2 className="text-lg font-semibold text-blue-800 mb-2">File Upload Guidelines</h2>
+            <ul className="list-disc pl-6 text-sm text-blue-900 space-y-1">
+              <li><strong>Purchase Order:</strong> Upload the original PO file as downloaded from your ERP. It should contain all metadata, vendor/brand info, and a table with columns like <em>Sno, Brand SKU Code, Size, Colors, Quantity, Unit Price, Amount</em>. Do not remove or edit header rows.</li>
+              <li><strong>Put Away:</strong> Upload a CSV with columns <em>SKU</em> and <em>BIN</em>. Each row represents a single SKU that has been received and put away in its bin location. No extra metadata is needed.</li>
+              <li><strong>QC Fail:</strong> Upload a CSV with columns <em>SKU</em> and <em>REMARK</em>. List only SKUs that failed QC, with a brief remark for each.</li>
+              <li>All files must be in <strong>CSV</strong> format. Excel files should be saved/exported as CSV before uploading.</li>
+              <li>Do not modify the structure or remove any columns from the original files.</li>
+            </ul>
+          </div>
+
           {/* Header Form */}
           <HeaderForm
             key={testMode ? 'test' : 'prod'}
