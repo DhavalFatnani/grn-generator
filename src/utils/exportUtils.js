@@ -1227,13 +1227,7 @@ class GRNExporter {
         // Helper function to generate remarks
         function generateRemarks(item) {
           const remarks = [];
-          // Guard for missing grnHeaderInfo
-          if (!this || !this.grnHeaderInfo) {
-            remarks.push("Data incomplete");
-            return remarks.join(" | ");
-          }
-          
-          // Check for shortage - either by quantity or status
+          // Check for shortage
           if ((item["Shortage Qty"] || 0) > 0 || item.Status === "Shortage" || item.Status === "Shortage & QC Failed") {
             const shortageQty = item["Shortage Qty"] || 0;
             if (shortageQty > 0) {
@@ -1242,8 +1236,7 @@ class GRNExporter {
               remarks.push("Shortage detected");
             }
           }
-          
-          // Check for excess - either by quantity or status
+          // Check for excess
           if ((item["Excess Qty"] || 0) > 0 || item.Status === "Excess" || item.Status === "Excess & QC Failed" || item.Status === "Excess Receipt") {
             const excessQty = item["Excess Qty"] || 0;
             if (excessQty > 0) {
@@ -1252,8 +1245,7 @@ class GRNExporter {
               remarks.push("Excess detected");
             }
           }
-          
-          // Check for not ordered items
+          // Check for not ordered
           if ((item["Not Ordered Qty"] || 0) > 0 || item.Status === "Not Ordered") {
             const notOrderedQty = item["Not Ordered Qty"] || 0;
             if (notOrderedQty > 0) {
@@ -1262,12 +1254,10 @@ class GRNExporter {
               remarks.push("Items not in purchase order");
             }
           }
-          
-          // Check for not received items
+          // Check for not received
           if (item.Status === "Not Received") {
             remarks.push("Items not received");
           }
-          
           // Check for QC issues
           if (grnHeaderInfo.qcPerformed) {
             const qcRemarks = [];
@@ -1281,12 +1271,10 @@ class GRNExporter {
               remarks.push("QC: " + ((item["Failed QC Qty"] || 0) > 0 ? "Failed" : "Passed") + " (" + qcRemarks.join(", ") + ")");
             }
           }
-          
-          // Only show "All items received as ordered" if there are no issues
+          // Only show blank if there are no issues
           if (remarks.length === 0) {
-            remarks.push("All items received as ordered");
+            return '';
           }
-          
           return remarks.join(" | ");
         }
 
@@ -1416,13 +1404,15 @@ class GRNExporter {
                                  row.Status === 'Shortage' ? '#f8d7da' : 
                                  row.Status === 'Excess' ? '#fff3cd' : 
                                  row.Status === 'Not Ordered' ? '#d1ecf1' : 
-                                 row.Status === 'Not Received' ? '#e2e3e5' : '#f8d7da';
+                                 row.Status === 'Not Received' ? '#e2e3e5' : 
+                                 row.Status === 'Received' ? '#d4edda' : '#f8d7da';
 
             const statusTextColor = row.Status === 'Complete' ? '#155724' : 
                                    row.Status === 'Shortage' ? '#721c24' : 
                                    row.Status === 'Excess' ? '#856404' : 
                                    row.Status === 'Not Ordered' ? '#0c5460' : 
-                                   row.Status === 'Not Received' ? '#383d41' : '#721c24';
+                                   row.Status === 'Not Received' ? '#383d41' : 
+                                   row.Status === 'Received' ? '#155724' : '#721c24';
 
             return '<tr>' +
               '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (index + 1) + '</td>' +
@@ -2105,13 +2095,15 @@ function downloadPDF(grnData, grnHeaderInfo) {
                            row.Status === 'Shortage' ? '#f8d7da' : 
                            row.Status === 'Excess' ? '#fff3cd' : 
                            row.Status === 'Not Ordered' ? '#d1ecf1' : 
-                           row.Status === 'Not Received' ? '#e2e3e5' : '#f8d7da';
+                           row.Status === 'Not Received' ? '#e2e3e5' : 
+                           row.Status === 'Received' ? '#d4edda' : '#f8d7da';
 
       const statusTextColor = row.Status === 'Complete' ? '#155724' : 
                              row.Status === 'Shortage' ? '#721c24' : 
                              row.Status === 'Excess' ? '#856404' : 
                              row.Status === 'Not Ordered' ? '#0c5460' : 
-                             row.Status === 'Not Received' ? '#383d41' : '#721c24';
+                             row.Status === 'Not Received' ? '#383d41' : 
+                             row.Status === 'Received' ? '#155724' : '#721c24';
 
       return '<tr>' +
         '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + (index + 1) + '</td>' +

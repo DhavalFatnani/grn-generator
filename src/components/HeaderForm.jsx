@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { TEST_DATA_TEMPLATES } from '../utils/constants';
 
 export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setPreviousValues, testMode }) => {
   console.log("HeaderForm: grnHeaderInfo.qcDoneBy", grnHeaderInfo.qcDoneBy);
+
+  const inwardDateRef = useRef(null);
 
   const handleMultiSelectChange = (e) => {
     const { name, value } = e.target;
@@ -171,15 +173,25 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
             <label className="block text-sm font-medium text-gray-600 mb-1">
               Inward Date <span className="text-blue-500">*</span>
             </label>
-            <div className="relative">
-            <input
-              type="date"
-              value={grnHeaderInfo.inwardDate}
+            <div
+              className="relative cursor-pointer"
+              onClick={() => inwardDateRef.current && inwardDateRef.current.showPicker ? inwardDateRef.current.showPicker() : inwardDateRef.current && inwardDateRef.current.focus()}
+              tabIndex={0}
+              role="button"
+              style={{ outline: 'none' }}
+            >
+              <input
+                type="date"
+                value={grnHeaderInfo.inwardDate}
                 onChange={onHeaderChange}
-              name="inwardDate"
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer"
-              required
-            />
+                name="inwardDate"
+                ref={inwardDateRef}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer bg-white"
+                required
+                onClick={e => e.stopPropagation()} // Prevent bubbling to parent div
+                readOnly={false}
+              />
+              <span className="absolute inset-0" style={{ pointerEvents: 'none' }}></span>
             </div>
           </div>
         </div>
