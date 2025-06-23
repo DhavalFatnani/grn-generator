@@ -194,24 +194,13 @@ class GRNExporter {
         headers.push("QC Status");
       }
       headers.push("Status", "Remarks");
-
-      // Helper function to generate remarks
-      const generateRemarks = (item) => {
-        const remarks = [];
-        if (!this || !this.grnHeaderInfo) {
-          remarks.push("Data incomplete");
-          return remarks.join(" | ");
-        }
-        // ... existing code ...
-      };
-
       const dataRows = this.grnData.map((item, index) => {
         const row = [
           index + 1,
-          item["Brand SKU"] || "",
-          item["KNOT SKU"] || "",
-          item["Size"] || "",
-          item["Color"] || "",
+          this.getBrandSku(item),
+          this.getKnotSku(item),
+          item["Size"] || '',
+          item["Color"] || '',
           item["Ordered Qty"] || 0,
           item["Received Qty"] || 0
         ];
@@ -226,11 +215,11 @@ class GRNExporter {
           item["Excess Qty"] || 0
         );
         if (this.grnHeaderInfo.qcPerformed) {
-          row.push(item["QC Status"] || "");
+          row.push(item["QC Status"] || '');
         }
         row.push(
-          item.Status || "",
-          generateRemarks(item)
+          item.Status || '',
+          this.generateRemarks(item)
         );
         return row;
       });
@@ -1025,9 +1014,8 @@ class GRNExporter {
     const qcStatusText = this.getQCStatusText(item);
     const statusClass = this.getStatusClass(item.Status);
     const statusText = this.getStatusText(item.Status);
-    // Map correct keys for export
-    const brandSku = item["Brand SKU"] || item["Brand SKU Code"] || '-';
-    const knotSku = item["KNOT SKU"] || item["KNOT SKU Code"] || '-';
+    const brandSku = this.getBrandSku(item) || '-';
+    const knotSku = this.getKnotSku(item) || '-';
     return `
       <tr>
         <td>${serialNo}</td>
@@ -1076,13 +1064,8 @@ class GRNExporter {
 
   generateRemarks(item) {
     const remarks = [];
-    // Guard for missing grnHeaderInfo
-    if (!this || !this.grnHeaderInfo) {
-      remarks.push("Data incomplete");
-      return remarks.join(" | ");
-    }
-    
-    // Check for shortage - either by quantity or status
+    // Remove 'Data incomplete' logic, always generate meaningful remarks or blank
+    // Check for shortage
     if ((item["Shortage Qty"] || 0) > 0 || item.Status === "Shortage" || item.Status === "Shortage & QC Failed") {
       const shortageQty = item["Shortage Qty"] || 0;
       if (shortageQty > 0) {
@@ -1091,8 +1074,7 @@ class GRNExporter {
         remarks.push("Shortage detected");
       }
     }
-    
-    // Check for excess - either by quantity or status
+    // Check for excess
     if ((item["Excess Qty"] || 0) > 0 || item.Status === "Excess" || item.Status === "Excess & QC Failed" || item.Status === "Excess Receipt") {
       const excessQty = item["Excess Qty"] || 0;
       if (excessQty > 0) {
@@ -1101,8 +1083,7 @@ class GRNExporter {
         remarks.push("Excess detected");
       }
     }
-    
-    // Check for not ordered items
+    // Check for not ordered
     if ((item["Not Ordered Qty"] || 0) > 0 || item.Status === "Not Ordered") {
       const notOrderedQty = item["Not Ordered Qty"] || 0;
       if (notOrderedQty > 0) {
@@ -1111,14 +1092,12 @@ class GRNExporter {
         remarks.push("Items not in purchase order");
       }
     }
-    
-    // Check for not received items
+    // Check for not received
     if (item.Status === "Not Received") {
       remarks.push("Items not received");
     }
-    
     // Check for QC issues
-    if (this.grnHeaderInfo.qcPerformed) {
+    if (this.grnHeaderInfo && this.grnHeaderInfo.qcPerformed) {
       const qcRemarks = [];
       if ((item["Passed QC Qty"] || 0) > 0) {
         qcRemarks.push(item["Passed QC Qty"] + " passed");
@@ -1130,12 +1109,10 @@ class GRNExporter {
         remarks.push("QC: " + ((item["Failed QC Qty"] || 0) > 0 ? "Failed" : "Passed") + " (" + qcRemarks.join(", ") + ")");
       }
     }
-    
-    // Only show "All items received as ordered" if there are no issues
+    // Only show 'All items received as ordered' if there are no issues
     if (remarks.length === 0) {
-      remarks.push("All items received as ordered");
+      return '';
     }
-    
     return remarks.join(" | ");
   }
 
@@ -1934,12 +1911,13 @@ class GRNExporter {
     const qcStatusText = this.getQCStatusText(item);
     const statusClass = this.getStatusClass(item.Status);
     const statusText = this.getStatusText(item.Status);
-    
+    const brandSku = this.getBrandSku(item) || '-';
+    const knotSku = this.getKnotSku(item) || '-';
     return `
       <tr>
         <td>${serialNo}</td>
-        <td class="sku-cell">${item["Brand SKU"] || '-'}</td>
-        <td class="sku-cell">${item["KNOT SKU"] || '-'}</td>
+        <td class="sku-cell">${brandSku}</td>
+        <td class="sku-cell">${knotSku}</td>
         <td>${item["Size"] || '-'}</td>
         <td>${item["Color"] || '-'}</td>
         <td class="qty-cell">${item["Ordered Qty"] || 0}</td>
@@ -2026,6 +2004,14 @@ class GRNExporter {
     const seconds = String(now.getSeconds()).padStart(2, '0');
     
     return `${day}/${month}/${year} at ${hours}:${minutes}:${seconds}`;
+  }
+
+  // Helper to get correct SKU values
+  getBrandSku(item) {
+    return item["Brand SKU"] || item["Brand SKU Code"] || '';
+  }
+  getKnotSku(item) {
+    return item["KNOT SKU"] || item["KNOT SKU Code"] || '';
   }
 }
 
