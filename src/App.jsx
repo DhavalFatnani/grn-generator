@@ -7,7 +7,7 @@ import { DataPreviewModal } from "./components/DataPreviewModal";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useGRNGenerator } from "./hooks/useGRNGenerator";
 import { downloadCSV, downloadHTML, downloadPDF } from "./utils/exportUtils";
-import { calculateSummaryStats, getStatusColor } from "./utils/helpers.js";
+import { getStatusColor } from "./utils/helpers.js";
 import { DEFAULT_VALUES, INITIAL_GRN_HEADER, TEST_DATA_TEMPLATES } from "./utils/constants.js";
 
 const GRNGenerator = () => {
@@ -44,6 +44,14 @@ const GRNGenerator = () => {
     errors: grnErrors,
     generateGRN,
   } = useGRNGenerator();
+
+  // Filter and Search State
+  const [activeFilters, setActiveFilters] = useState({
+    status: [],
+    qcStatus: [],
+    issueType: [],
+  });
+  const [search, setSearch] = useState('');
 
   // Test Mode State
   const [testMode, setTestMode] = useState(() => {
@@ -86,10 +94,10 @@ const GRNGenerator = () => {
 
   // Update header info when file header info changes
   useEffect(() => {
-    setGrnHeaderInfo((prev) => ({
-      ...prev,
-      ...fileHeaderInfo,
-    }));
+      setGrnHeaderInfo((prev) => ({
+        ...prev,
+        ...fileHeaderInfo,
+      }));
   }, [fileHeaderInfo]);
 
   const handleHeaderChange = useCallback((e) => {
@@ -110,6 +118,16 @@ const GRNGenerator = () => {
     downloadCSV(grnData, mergedHeaderInfo);
   }, [grnData, grnHeaderInfo]);
 
+  const handleDownloadFilteredCSV = useCallback(() => {
+    const filteredData = getFilteredData();
+    if (!filteredData?.length || !grnHeaderInfo?.brandName || !grnHeaderInfo?.replenishmentNumber) {
+      console.error('Missing required data for filtered CSV download');
+      return;
+    }
+    const mergedHeaderInfo = { ...INITIAL_GRN_HEADER, ...grnHeaderInfo };
+    downloadCSV(filteredData, mergedHeaderInfo, { isFilteredExport: true });
+  }, [grnData, activeFilters, search, grnHeaderInfo]);
+
   const handleDownloadGRN = useCallback(() => {
     downloadHTML(grnData, grnHeaderInfo);
   }, [grnData, grnHeaderInfo]);
@@ -122,8 +140,61 @@ const GRNGenerator = () => {
     downloadPDF(grnData, grnHeaderInfo);
   }, [grnData, grnHeaderInfo]);
 
-  // Calculate summary statistics
-  const summaryStats = calculateSummaryStats(grnData);
+  // Filtering Logic
+  const getFilteredData = useCallback(() => {
+    const qcPerformed = grnHeaderInfo.qcPerformed;
+    return grnData.filter(item => {
+      // Search filter
+      if (search) {
+        const brand = (item["Brand SKU Code"] || '').toString().toLowerCase();
+        const knot = (item["KNOT SKU Code"] || '').toString().toLowerCase();
+        if (!brand.includes(search.toLowerCase()) && !knot.includes(search.toLowerCase())) {
+          return false;
+        }
+      }
+      // Status filter
+      if (activeFilters.status.length > 0 && !activeFilters.status.includes(item.Status)) {
+        return false;
+      }
+      // QC Status filter
+      if (qcPerformed && activeFilters.qcStatus.length > 0 && !activeFilters.qcStatus.includes(item["QC Status"])) {
+        return false;
+      }
+      // Issue type filter
+      if (activeFilters.issueType.length > 0) {
+        const hasQCIssue = qcPerformed && item["QC Status"] !== "Passed" && item["QC Status"] !== "Not Performed";
+        const hasQtyIssue = ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status);
+
+        const issueConditions = {
+          qcOnly: hasQCIssue && !hasQtyIssue,
+          qtyOnly: !hasQCIssue && hasQtyIssue,
+          bothIssues: hasQCIssue && hasQtyIssue,
+        };
+
+        if (!activeFilters.issueType.some(issue => issueConditions[issue])) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [grnData, activeFilters, search, grnHeaderInfo.qcPerformed]);
+
+  const filteredData = getFilteredData();
+
+  // Filter Handlers
+  const handleFilterChange = useCallback((filterType, value) => {
+    setActiveFilters(prev => ({
+      ...prev,
+      [filterType]: prev[filterType].includes(value)
+        ? prev[filterType].filter(v => v !== value)
+        : [...prev[filterType], value],
+    }));
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setActiveFilters({ status: [], qcStatus: [], issueType: [] });
+    setSearch('');
+  }, []);
 
   // Generate GRN data
   const handleGenerateGRN = useCallback(() => {
@@ -165,34 +236,34 @@ const GRNGenerator = () => {
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-700 mb-4">
               Upload Files
-            </h2>
+          </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <FileUploadBox
-                title="Purchase Order"
-                onFileUpload={handlePurchaseOrderUpload}
+            <FileUploadBox
+              title="Purchase Order"
+              onFileUpload={handlePurchaseOrderUpload}
                 onClear={() => clearData('purchaseOrder')}
                 data={data.purchaseOrder}
                 loading={fileLoading}
-                required
-              />
-              <FileUploadBox
+              required
+            />
+            <FileUploadBox
                 title="Put Away"
-                onFileUpload={handlePutAwayUpload}
+              onFileUpload={handlePutAwayUpload}
                 onClear={() => clearData('putAway')}
                 data={data.putAway}
                 loading={fileLoading}
-                required
-              />
-              <FileUploadBox
+              required
+            />
+            <FileUploadBox
                 title="QC Fail"
                 onFileUpload={handleQcFailUpload}
                 onClear={() => clearData('qcFail')}
                 data={data.qcFail}
                 loading={fileLoading}
-                required={false}
-              />
-            </div>
+              required={false}
+            />
           </div>
+        </div>
 
           {/* File Upload Guidelines section */}
           <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">
@@ -218,14 +289,14 @@ const GRNGenerator = () => {
 
           {/* Generate Button */}
           <div className="flex justify-center mb-6 mt-8">
-            <button
+          <button
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded shadow transition-colors"
-              onClick={handleGenerateGRN}
+            onClick={handleGenerateGRN}
               disabled={fileLoading || grnLoading || !data.purchaseOrder.length || !data.putAway.length}
-            >
+          >
               {grnLoading ? "Generating GRN..." : "Generate GRN"}
-            </button>
-          </div>
+          </button>
+        </div>
 
           {/* Error Display */}
           {(fileErrors.length > 0 || grnErrors.length > 0) && (
@@ -274,17 +345,25 @@ const GRNGenerator = () => {
               >
                 <span role="img" aria-label="Clear">🧹</span> Clear All
               </button>
-            </div>
-          )}
+          </div>
+        )}
 
-          {/* GRN Table */}
-          {grnData.length > 0 && (
+          {/* GRN Display Table */}
+        {grnData.length > 0 && (
             <GRNTable
               data={grnData}
+              filteredData={filteredData}
               getStatusColor={getStatusColor}
+              grnHeaderInfo={grnHeaderInfo}
+              activeFilters={activeFilters}
+              search={search}
+              onFilterChange={handleFilterChange}
+              onSearchChange={setSearch}
+              onClearFilters={handleClearFilters}
+              onDownloadFiltered={handleDownloadFilteredCSV}
             />
           )}
-        </div>
+          </div>
       </div>
 
       {/* Data Preview Modal */}

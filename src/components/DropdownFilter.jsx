@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-function DropdownFilter({ label, options, selected, onChange, countFn, optionLabels = {} }) {
+function DropdownFilter({ label, options, selected, onSelect, countFn, optionLabels = {} }) {
   const [open, setOpen] = useState(false);
   const ref = useRef();
 
@@ -20,11 +20,7 @@ function DropdownFilter({ label, options, selected, onChange, countFn, optionLab
   }, []);
 
   const toggleOption = (val) => {
-    if (selected.includes(val)) {
-      onChange(selected.filter((v) => v !== val));
-    } else {
-      onChange([...selected, val]);
-    }
+    onSelect(val);
   };
 
   return (

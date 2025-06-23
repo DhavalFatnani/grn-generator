@@ -133,171 +133,113 @@ class GRNExporter {
   }
 
   // Generate CSV content
-  generateCSV() {
-    const summaryStats = this.calculateSummaryStats();
+  generateCSV(options = {}) {
+    const { isFilteredExport = false } = options;
     
-    // Create metadata section
-    const metadata = [
-      ["Goods Received Note (GRN)"],
-      ["Document Number", this.documentNumber],
-      ["Generated Date", this.today.toLocaleDateString("en-GB")],
-      ["Generated Time", this.today.toLocaleTimeString()],
-      [], // Empty row for spacing
-      ["Order Information"],
-      ["PO Number", this.grnHeaderInfo.poNumber],
-      ["Vendor/Brand", this.grnHeaderInfo.brandName],
-      ["Replenishment Number", this.grnHeaderInfo.replenishmentNumber],
-      [], // Empty row for spacing
-      ["Receipt Information"],
-      ["Inward Date", this.grnHeaderInfo.inwardDate],
-      ["Warehouse", this.grnHeaderInfo.warehouseNo],
-      ["Receipt Accuracy", summaryStats.receiptAccuracy + "%"],
-      [], // Empty row for spacing
-      ["Summary Statistics"],
-      ["Total Ordered Units", summaryStats.totalOrderedUnits],
-      ["Total Received Units", summaryStats.totalReceivedUnits],
-      ["Total Shortage Units", summaryStats.totalShortageUnits],
-      ["Total Excess Units", summaryStats.totalExcessUnits],
-      ["Total Not Ordered Units", summaryStats.totalNotOrderedUnits]
-    ];
-    
-    // Add QC statistics if QC was performed
-    if (this.grnHeaderInfo.qcPerformed) {
+    const metadata = [];
+    if (!isFilteredExport) {
+      const summaryStats = this.calculateSummaryStats();
       metadata.push(
-        ["Total QC Passed Units", summaryStats.totalQcPassedUnits],
-        ["Total QC Failed Units", summaryStats.totalQcFailedUnits],
-        ["QC Pass Rate", summaryStats.qcPassRate + "%"]
+        ["Goods Received Note (GRN)"],
+        ["Document Number", this.documentNumber],
+        ["Generated Date", this.today.toLocaleDateString("en-GB")],
+        ["Generated Time", this.today.toLocaleTimeString()],
+        [], // Empty row for spacing
+        ["Order Information"],
+        ["PO Number", this.grnHeaderInfo.poNumber],
+        ["Vendor/Brand", this.grnHeaderInfo.brandName],
+        ["Replenishment Number", this.grnHeaderInfo.replenishmentNumber],
+        [], // Empty row for spacing
+        ["Receipt Information"],
+        ["Inward Date", this.grnHeaderInfo.inwardDate],
+        ["Warehouse", this.grnHeaderInfo.warehouseNo],
+        ["Receipt Accuracy", summaryStats.receiptAccuracy + "%"],
+        [], // Empty row for spacing
+        ["Summary Statistics"],
+        ["Total Ordered Units", summaryStats.totalOrderedUnits],
+        ["Total Received Units", summaryStats.totalReceivedUnits],
+        ["Total Shortage Units", summaryStats.totalShortageUnits],
+        ["Total Excess Units", summaryStats.totalExcessUnits],
+        ["Total Not Ordered Units", summaryStats.totalNotOrderedUnits]
       );
-    }
-    
-    metadata.push([], []); // Add two empty rows before data
-    
-    // Define headers based on QC status
-    const headers = [
-      "S.No", "Brand SKU", "KNOT SKU", "Size", "Color", 
-      "Ordered Qty", "Received Qty"
-    ];
-    
-    if (this.grnHeaderInfo.qcPerformed) {
-      headers.push("Passed QC Qty", "Failed QC Qty");
-    }
-    
-    headers.push("Shortage Qty", "Excess Qty");
-    
-    if (this.grnHeaderInfo.qcPerformed) {
-      headers.push("QC Status");
-    }
-    
-    headers.push("Status", "Remarks");
-
-    // Helper function to generate remarks
-    const generateRemarks = (item) => {
-      const remarks = [];
-      // Guard for missing grnHeaderInfo
-      if (!this || !this.grnHeaderInfo) {
-        remarks.push("Data incomplete");
-        return remarks.join(" | ");
-      }
-      
-      // Check for shortage - either by quantity or status
-      if ((item["Shortage Qty"] || 0) > 0 || item.Status === "Shortage" || item.Status === "Shortage & QC Failed") {
-        const shortageQty = item["Shortage Qty"] || 0;
-        if (shortageQty > 0) {
-          remarks.push("Short by " + shortageQty + " units");
-        } else {
-          remarks.push("Shortage detected");
-        }
-      }
-      
-      // Check for excess - either by quantity or status
-      if ((item["Excess Qty"] || 0) > 0 || item.Status === "Excess" || item.Status === "Excess & QC Failed" || item.Status === "Excess Receipt") {
-        const excessQty = item["Excess Qty"] || 0;
-        if (excessQty > 0) {
-          remarks.push("Excess by " + excessQty + " units");
-        } else {
-          remarks.push("Excess detected");
-        }
-      }
-      
-      // Check for not ordered items
-      if ((item["Not Ordered Qty"] || 0) > 0 || item.Status === "Not Ordered") {
-        const notOrderedQty = item["Not Ordered Qty"] || 0;
-        if (notOrderedQty > 0) {
-          remarks.push(notOrderedQty + " units not ordered");
-        } else {
-          remarks.push("Items not in purchase order");
-        }
-      }
-      
-      // Check for not received items
-      if (item.Status === "Not Received") {
-        remarks.push("Items not received");
-      }
-      
-      // Check for QC issues
-      if (this.grnHeaderInfo.qcPerformed) {
-        const qcRemarks = [];
-        if ((item["Passed QC Qty"] || 0) > 0) {
-          qcRemarks.push(item["Passed QC Qty"] + " passed");
-        }
-        if ((item["Failed QC Qty"] || 0) > 0) {
-          qcRemarks.push(item["Failed QC Qty"] + " failed");
-        }
-        if (qcRemarks.length > 0) {
-          remarks.push("QC: " + ((item["Failed QC Qty"] || 0) > 0 ? "Failed" : "Passed") + " (" + qcRemarks.join(", ") + ")");
-        }
-      }
-      
-      // Only show "All items received as ordered" if there are no issues
-      if (remarks.length === 0) {
-        remarks.push("All items received as ordered");
-      }
-      
-      return remarks.join(" | ");
-    };
-
-    const dataRows = this.grnData.map((item, index) => {
-      const row = [
-        index + 1,
-        item["Brand SKU"] || "",
-        item["KNOT SKU"] || "",
-        item["Size"] || "",
-        item["Color"] || "",
-        item["Ordered Qty"] || 0,
-        item["Received Qty"] || 0
-      ];
       
       if (this.grnHeaderInfo.qcPerformed) {
-        row.push(
-          item["Passed QC Qty"] || 0,
-          item["Failed QC Qty"] || 0
+        metadata.push(
+          ["Total QC Passed Units", summaryStats.totalQcPassedUnits],
+          ["Total QC Failed Units", summaryStats.totalQcFailedUnits],
+          ["QC Pass Rate", summaryStats.qcPassRate + "%"]
         );
       }
       
-      row.push(
-        item["Shortage Qty"] || 0,
-        item["Excess Qty"] || 0
-      );
-      
+      metadata.push([], []); // Add two empty rows before data
+    }
+    
+    let csvData = [];
+    if (isFilteredExport) {
+      // Use keys from first row as headers
+      if (this.grnData.length === 0) return '';
+      const headers = Object.keys(this.grnData[0]);
+      const dataRows = this.grnData.map(row => headers.map(h => row[h]));
+      csvData = [headers, ...dataRows];
+    } else {
+      const headers = [
+        "S.No", "Brand SKU", "KNOT SKU", "Size", "Color", 
+        "Ordered Qty", "Received Qty"
+      ];
       if (this.grnHeaderInfo.qcPerformed) {
-        row.push(item["QC Status"] || "");
+        headers.push("Passed QC Qty", "Failed QC Qty");
       }
-      
-      row.push(
-        item.Status || "",
-        generateRemarks(item)
-      );
-      
-      return row;
-    });
+      headers.push("Shortage Qty", "Excess Qty");
+      if (this.grnHeaderInfo.qcPerformed) {
+        headers.push("QC Status");
+      }
+      headers.push("Status", "Remarks");
 
-    // Combine metadata, headers, and data rows
-    const csvData = [
-      ...metadata,
-      headers,
-      ...dataRows
-    ];
+      // Helper function to generate remarks
+      const generateRemarks = (item) => {
+        const remarks = [];
+        if (!this || !this.grnHeaderInfo) {
+          remarks.push("Data incomplete");
+          return remarks.join(" | ");
+        }
+        // ... existing code ...
+      };
 
+      const dataRows = this.grnData.map((item, index) => {
+        const row = [
+          index + 1,
+          item["Brand SKU"] || "",
+          item["KNOT SKU"] || "",
+          item["Size"] || "",
+          item["Color"] || "",
+          item["Ordered Qty"] || 0,
+          item["Received Qty"] || 0
+        ];
+        if (this.grnHeaderInfo.qcPerformed) {
+          row.push(
+            item["Passed QC Qty"] || 0,
+            item["Failed QC Qty"] || 0
+          );
+        }
+        row.push(
+          item["Shortage Qty"] || 0,
+          item["Excess Qty"] || 0
+        );
+        if (this.grnHeaderInfo.qcPerformed) {
+          row.push(item["QC Status"] || "");
+        }
+        row.push(
+          item.Status || "",
+          generateRemarks(item)
+        );
+        return row;
+      });
+      csvData = [
+        ...metadata,
+        headers,
+        ...dataRows
+      ];
+    }
     return this.convertToCSVString(csvData);
   }
 
@@ -2102,16 +2044,25 @@ function downloadHTML(grnData, grnHeaderInfo) {
         URL.revokeObjectURL(url);
 }
 
-function downloadCSV(grnData, grnHeaderInfo) {
+function downloadCSV(grnData, grnHeaderInfo, options = {}) {
+  const { isFilteredExport = false } = options;
   const exporter = new GRNExporter(grnData, grnHeaderInfo);
-  const csvContent = exporter.generateCSV();
+  const csvContent = exporter.generateCSV({ isFilteredExport });
   
   // Create and trigger download
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${exporter.documentNumber}.csv`;
+  
+  if (isFilteredExport) {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/:/g, ":");
+    a.download = `filtered-export-${dateStr}-${timeStr}-${grnHeaderInfo.brandName.replace(/\s+/g, "")}-${grnHeaderInfo.replenishmentNumber}.csv`;
+  } else {
+    a.download = `${exporter.documentNumber}.csv`;
+  }
+  
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

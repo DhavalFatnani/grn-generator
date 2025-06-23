@@ -11,15 +11,22 @@ const SummaryCard = ({ icon, label, value, color, highlight }) => (
   </div>
 );
 
-export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) => {
+export const GRNTable = ({
+  data = [],
+  filteredData = [],
+  grnHeaderInfo = {},
+  activeFilters = { status: [], qcStatus: [], issueType: [] },
+  search = '',
+  onFilterChange,
+  onSearchChange,
+  onClearFilters,
+  onDownloadFiltered,
+  getStatusColor: customGetStatusColor,
+}) => {
+  const qcPerformed = grnHeaderInfo.qcPerformed;
   const [tooltip, setTooltip] = useState({ show: false, content: '', x: 0, y: 0 });
-  const [activeFilters, setActiveFilters] = useState({
-    status: [],
-    qcStatus: [],
-    issueType: []
-  });
-  const [search, setSearch] = useState('');
   const tableRef = useRef(null);
+  const [expandedRow, setExpandedRow] = useState(null);
 
   const handleMouseEnter = (e, content) => {
     const targetRect = e.currentTarget.getBoundingClientRect();
@@ -36,62 +43,15 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
     setTooltip({ show: false, content: '', x: 0, y: 0 });
   };
 
-  const handleFilterClick = useCallback((filterType, value) => {
-    setActiveFilters(prev => ({
-      ...prev,
-      [filterType]: prev[filterType].includes(value) ? prev[filterType].filter((v) => v !== value) : [...prev[filterType], value]
-    }));
-  }, []);
-
-  const handleClearAllFilters = () => {
-    setActiveFilters({ status: [], qcStatus: [], issueType: [] });
-    setSearch('');
-  };
-
-  const getFilteredData = useCallback(() => {
-    return data.filter(item => {
-      // Search filter
-      if (search) {
-        const brand = (item["Brand SKU Code"] || '').toString().toLowerCase();
-        const knot = (item["KNOT SKU Code"] || '').toString().toLowerCase();
-        if (!brand.includes(search.toLowerCase()) && !knot.includes(search.toLowerCase())) {
-            return false;
-          }
-      }
-      // Status filter
-      if (activeFilters.status.length > 0) {
-        if (!activeFilters.status.includes(item.Status)) {
-          return false;
-        }
-      }
-      // QC Status filter
-      if (activeFilters.qcStatus.length > 0 && !activeFilters.qcStatus.includes(item["QC Status"])) {
-        return false;
-      }
-      // Issue type filter
-      if (activeFilters.issueType.length > 0) {
-        const hasQCIssue = item["QC Status"] !== "Passed" && item["QC Status"] !== "Not Performed";
-        const hasQtyIssue = ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status);
-        if (!activeFilters.issueType.includes('qcOnly') && !hasQCIssue) return false;
-        if (!activeFilters.issueType.includes('qtyOnly') && !hasQtyIssue) return false;
-        if (!activeFilters.issueType.includes('bothIssues') && (hasQCIssue && hasQtyIssue)) return false;
-      }
-      return true;
-    });
-  }, [data, activeFilters, search]);
-
-  const filteredData = getFilteredData();
-
   // Summary bar logic
   const total = data.length;
-  const filtered = filteredData.length;
   const totalReceived = data.reduce((acc, item) => acc + (item["Received Qty"] || 0), 0);
   const totalQCPassed = data.reduce((acc, item) => acc + (item["Passed QC Qty"] || 0), 0);
   const totalQCFailed = data.reduce((acc, item) => acc + (item["Failed QC Qty"] || 0), 0);
   const qcPassRate = totalReceived > 0 ? ((totalQCPassed / totalReceived) * 100).toFixed(1) : '0.0';
   const withIssues = data.filter(item => (
     ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status) ||
-    ["Failed", "Partial"].includes(item["QC Status"]))
+    (qcPerformed && ["Failed", "Partial"].includes(item["QC Status"])))
   ).length;
 
   // Row highlight logic
@@ -140,7 +100,7 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
     return (
       <button
         key={`${filterType}-${value}`}
-        onClick={() => handleFilterClick(filterType, value)}
+        onClick={() => onFilterChange(filterType, value)}
         className={getFilterButtonClass(filterType, value, isActive)}
       >
         {label}
@@ -155,7 +115,7 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
       activeChips.push(
         <span key="status" className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${getFilterButtonClass('status', activeFilters.status, true)}`}>
           Status: {activeFilters.status}
-          <button onClick={() => handleFilterClick('status', activeFilters.status)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+          <button onClick={() => onFilterChange('status', activeFilters.status)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
         </span>
       );
     }
@@ -164,7 +124,7 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
       activeChips.push(
         <span key="qcStatus" className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${getFilterButtonClass('qcStatus', activeFilters.qcStatus, true)}`}>
           QC: {activeFilters.qcStatus}
-          <button onClick={() => handleFilterClick('qcStatus', activeFilters.qcStatus)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+          <button onClick={() => onFilterChange('qcStatus', activeFilters.qcStatus)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
         </span>
       );
     }
@@ -174,7 +134,7 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
       activeChips.push(
         <span key="issueType" className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${getFilterButtonClass('issueType', activeFilters.issueType, true)}`}>
           Issue: {issueLabels[activeFilters.issueType]}
-          <button onClick={() => handleFilterClick('issueType', activeFilters.issueType)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+          <button onClick={() => onFilterChange('issueType', activeFilters.issueType)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
         </span>
       );
     }
@@ -202,11 +162,15 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-6">
           <SummaryCard icon="📦" label="Total Items" value={total} color="bg-blue-50" />
           <SummaryCard icon="📥" label="Total Received" value={totalReceived} color="bg-green-50" />
-          <SummaryCard icon="✅" label="QC Passed" value={totalQCPassed} color="bg-yellow-50" />
-          <SummaryCard icon="❌" label="QC Failed" value={totalQCFailed} color="bg-red-50" highlight={totalQCFailed > 0} />
+          {qcPerformed && (
+            <>
+              <SummaryCard icon="✅" label="QC Passed" value={totalQCPassed} color="bg-yellow-50" />
+              <SummaryCard icon="❌" label="QC Failed" value={totalQCFailed} color="bg-red-50" />
+              <SummaryCard icon="📊" label="QC Pass Rate" value={`${qcPassRate}%`} color="bg-blue-50" />
+            </>
+          )}
           <SummaryCard icon="⚠️" label="With Issues" value={withIssues} color="bg-purple-50" highlight={withIssues > 0} />
-          <SummaryCard icon="📊" label="QC Pass Rate" value={`${qcPassRate}%`} color="bg-blue-50" />
-        </div>
+          </div>
       )}
       {/* Modern Filter Bar */}
       <div className="sticky top-0 z-30 bg-white shadow-md border-b border-gray-200 mb-4 px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-4 rounded-lg">
@@ -218,10 +182,10 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
             className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 w-full md:w-64"
             placeholder="Search by SKU, Size, or Color..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => onSearchChange(e.target.value)}
           />
           {search && (
-            <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-700 ml-1">×</button>
+            <button onClick={() => onSearchChange('')} className="text-gray-400 hover:text-gray-700 ml-1">×</button>
           )}
         </div>
         {/* Dropdowns */}
@@ -231,36 +195,55 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
             label="Status"
             options={["Shortage", "Excess", "Not Received", "Excess Receipt", "Received"]}
             selected={activeFilters.status}
-            onChange={vals => setActiveFilters(f => ({ ...f, status: vals }))}
+            onSelect={(value) => onFilterChange('status', value)}
             countFn={val => data.filter(item => item.Status === val).length}
           />
           {/* QC Status Dropdown */}
-          <DropdownFilter
-            label="QC Status"
-            options={["Passed", "Failed", "Partial", "Not Performed"]}
-            selected={activeFilters.qcStatus}
-            onChange={vals => setActiveFilters(f => ({ ...f, qcStatus: vals }))}
-            countFn={val => data.filter(item => item["QC Status"] === val).length}
-          />
+          {qcPerformed && (
+            <DropdownFilter
+              label="QC Status"
+              options={['Passed', 'Failed', 'Partial']}
+              selected={activeFilters.qcStatus}
+              onSelect={(value) => onFilterChange('qcStatus', value)}
+            />
+          )}
           {/* Issue Type Dropdown */}
           <DropdownFilter
             label="Issue Type"
             options={["qcOnly", "qtyOnly", "bothIssues"]}
             optionLabels={{ qcOnly: "QC Only", qtyOnly: "Quantity Only", bothIssues: "Both Issues" }}
             selected={activeFilters.issueType}
-            onChange={vals => setActiveFilters(f => ({ ...f, issueType: vals }))}
+            onSelect={(value) => onFilterChange('issueType', value)}
             countFn={val => {
-              if (val === "qcOnly") return data.filter(item => item["QC Status"] !== "Passed" && item["QC Status"] !== "Not Performed" && !["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)).length;
-              if (val === "qtyOnly") return data.filter(item => (item["QC Status"] === "Passed" || item["QC Status"] === "Not Performed") && ((item["Shortage Qty"] || 0) > 0 || (item["Excess Qty"] || 0) > 0 || (item["Not Ordered Qty"] || 0) > 0 || item.Status === "Not Received")).length;
-              if (val === "bothIssues") return data.filter(item => item["QC Status"] !== "Passed" && item["QC Status"] !== "Not Performed" && ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status)).length;
+              const hasQCIssue = (item) => qcPerformed && item["QC Status"] !== "Passed" && item["QC Status"] !== "Not Performed";
+              const hasQtyIssue = (item) => ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status);
+
+              if (val === "qcOnly") return data.filter(item => hasQCIssue(item) && !hasQtyIssue(item)).length;
+              if (val === "qtyOnly") return data.filter(item => !hasQCIssue(item) && hasQtyIssue(item)).length;
+              if (val === "bothIssues") return data.filter(item => hasQCIssue(item) && hasQtyIssue(item)).length;
               return 0;
             }}
           />
         </div>
-        {/* Clear All Button */}
-        {(search || activeFilters.status.length > 0 || activeFilters.qcStatus.length > 0 || activeFilters.issueType.length > 0) && (
-          <button onClick={handleClearAllFilters} className="ml-auto px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm font-medium border border-gray-300 transition-colors">Clear All</button>
-        )}
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 ml-auto">
+          {(search || activeFilters.status.length > 0 || activeFilters.qcStatus.length > 0 || activeFilters.issueType.length > 0) && (
+            <>
+              <button 
+                onClick={onDownloadFiltered}
+                className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium border border-blue-600 transition-colors"
+              >
+                Export View as CSV
+              </button>
+              <button 
+                onClick={onClearFilters} 
+                className="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm font-medium border border-gray-300 transition-colors"
+              >
+                Clear All
+              </button>
+            </>
+          )}
+        </div>
           </div>
       {/* Active Filter Chips */}
       {(search || activeFilters.status.length > 0 || activeFilters.qcStatus.length > 0 || activeFilters.issueType.length > 0) && (
@@ -268,25 +251,25 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
           {search && (
             <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800 shadow-sm animate-fade-in">
               Search: {search}
-              <button onClick={() => setSearch('')} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+              <button onClick={() => onSearchChange('')} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
             </span>
           )}
           {activeFilters.status.map(val => (
             <span key={val} className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-green-100 text-green-800 shadow-sm animate-fade-in">
               Status: {val}
-              <button onClick={() => setActiveFilters(f => ({ ...f, status: f.status.filter(v => v !== val) }))} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+              <button onClick={() => onFilterChange('status', val)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
             </span>
           ))}
           {activeFilters.qcStatus.map(val => (
             <span key={val} className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 shadow-sm animate-fade-in">
               QC: {val}
-              <button onClick={() => setActiveFilters(f => ({ ...f, qcStatus: f.qcStatus.filter(v => v !== val) }))} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+              <button onClick={() => onFilterChange('qcStatus', val)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
             </span>
           ))}
           {activeFilters.issueType.map(val => (
             <span key={val} className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-purple-100 text-purple-800 shadow-sm animate-fade-in">
               Issue: {val === 'qcOnly' ? 'QC Only' : val === 'qtyOnly' ? 'Quantity Only' : 'Both Issues'}
-              <button onClick={() => setActiveFilters(f => ({ ...f, issueType: f.issueType.filter(v => v !== val) }))} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+              <button onClick={() => onFilterChange('issueType', val)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
             </span>
           ))}
         </div>
@@ -302,41 +285,92 @@ export const GRNTable = ({ data = [], getStatusColor: customGetStatusColor }) =>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">KNOT SKU</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Colors</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bin</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ordered Qty</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Received Qty</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed QC Qty</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed QC Qty</th>
+              {qcPerformed && (
+                <>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed QC Qty</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed QC Qty</th>
+                </>
+              )}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shortage Qty</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Excess Qty</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QC Status</th>
+              {qcPerformed && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QC Status</th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {filteredData.map((item, index) => (
-              <tr key={index} className={getRowClass(item, index) + " hover:bg-blue-50 transition-colors duration-100"}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["S.No"]}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["Brand SKU Code"]}>{item["Brand SKU Code"]}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["KNOT SKU Code"]}>{item["KNOT SKU Code"]}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Size"]}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Colors"]}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Ordered Qty"]}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Received Qty"]}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Passed QC Qty"]}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Failed QC Qty"]}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span 
-                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${customGetStatusColor ? customGetStatusColor(item.Status) : getStatusColor(item.Status)}`}
-                    onMouseEnter={(e) => handleMouseEnter(e, item.Status)}
-                    onMouseLeave={handleMouseLeave}
+              <React.Fragment key={index}>
+                <tr className={getRowClass(item, index) + " hover:bg-blue-50 transition-colors duration-100"}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["S.No"]}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["Brand SKU Code"]}>{item["Brand SKU Code"]}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["KNOT SKU Code"]}>{item["KNOT SKU Code"]}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Size"]}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Colors"]}</td>
+                  <td className={
+                    (item["BinLocations"] && item["BinLocations"].length > 0)
+                      ? "px-6 py-4 whitespace-nowrap text-sm text-blue-900 cursor-pointer underline"
+                      : "px-6 py-4 whitespace-nowrap text-sm text-gray-400"
+                  } 
+                    onClick={() => {
+                      if (item["BinLocations"] && item["BinLocations"].length > 0) {
+                        setExpandedRow(expandedRow === index ? null : index);
+                      }
+                    }}
                   >
-                    {item.Status}
-                      </span>
+                    {item["BinLocations"] && item["BinLocations"].length > 0 ? (
+                      <>
+                        {item["Bin"]}
+                        <span className="ml-2 text-xs text-blue-500">[{expandedRow === index ? 'Hide' : 'Show'}]</span>
+                      </>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Ordered Qty"]}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Received Qty"]}</td>
+                  {qcPerformed && (
+                    <>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Passed QC Qty"]}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Failed QC Qty"]}</td>
+                    </>
+                  )}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Shortage Qty"]}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Excess Qty"]}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span 
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${customGetStatusColor ? customGetStatusColor(item.Status) : getStatusColor(item.Status)}`}
+                      onMouseEnter={(e) => handleMouseEnter(e, item.Status)}
+                      onMouseLeave={handleMouseLeave}
+                    >
+                      {item.Status}
+                    </span>
+                  </td>
+                  {qcPerformed && (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getQCStatusColor(item["QC Status"])}`}>{item["QC Status"]}</span>
                     </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getQCStatusColor(item["QC Status"])}`}>{item["QC Status"]}</span>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title={item["Remarks"]}>{item["Remarks"]}</td>
-              </tr>
+                  )}
+                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title={item["Remarks"]}>{item["Remarks"]}</td>
+                </tr>
+                {expandedRow === index && item["BinLocations"] && item["BinLocations"].length > 0 && (
+                  <tr className="bg-blue-50">
+                    <td colSpan={qcPerformed ? 15 : 13} className="px-6 py-3 text-xs text-blue-900">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span className="font-semibold">Bin Locations:</span>
+                        {item["BinLocations"].map((bin, i) => (
+                          <span key={i} className="inline-block bg-blue-100 text-blue-800 rounded px-2 py-1 text-xs font-mono border border-blue-200">{bin}</span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>

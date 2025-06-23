@@ -58,6 +58,8 @@ export const useGRNGenerator = () => {
 
       // 1. Pivot Putaway by SKU (case-insensitive, trimmed)
       const putawayPivot = {};
+      const binPivot = {};
+      const binListPivot = {};
       filteredPutAwayData.forEach(row => {
         const sku = (row["SKU ID"] || row["SKU"] || row["Brand SKU Code"] || row["KNOT SKU Code"] || "").toString().trim().toUpperCase();
         if (!sku) return;
@@ -65,6 +67,17 @@ export const useGRNGenerator = () => {
         // If Quantity column exists, use it, else count as 1
         const qty = parseQuantity(row["Quantity"] || row["Put Away Quantity"] || 1);
         putawayPivot[sku] += qty;
+        // Collect bin locations
+        const bin = row["BIN"] || row["Bin"] || row["Bin Location"] || row["BIN LOCATION"] || "";
+        if (bin) {
+          if (!binPivot[sku]) binPivot[sku] = new Set();
+          binPivot[sku].add(bin);
+          if (!binListPivot[sku]) binListPivot[sku] = [];
+          // Add 'qty' number of bins for this row
+          for (let i = 0; i < qty; i++) {
+            binListPivot[sku].push(bin);
+          }
+        }
       });
 
       // 2. Pivot QC Fail by SKU
@@ -97,7 +110,7 @@ export const useGRNGenerator = () => {
       const finalGrnData = Array.from(allSkus).map(sku => {
         const poRow = poPivot[sku];
         const orderedQty = poRow ? poRow.__qty : 0;
-        const receivedQty = putawayPivot[sku] || 0;
+        const receivedQty = (putawayPivot[sku] || 0) + (qcFailPivot[sku] || 0);
         const failedQCQty = qcFailPivot[sku] || 0;
         const passedQCQty = Math.max(0, receivedQty - failedQCQty);
         const shortageQty = Math.max(0, orderedQty - receivedQty);
@@ -133,6 +146,13 @@ export const useGRNGenerator = () => {
         remarks = remarks.trim();
 
         // Use PO row for meta fields if available, else blank
+        // Bin summary: e.g., 'A1 (2), B2 (3)'
+        let binSummary = '';
+        if (binListPivot[sku] && binListPivot[sku].length > 0) {
+          const binCounts = {};
+          binListPivot[sku].forEach(b => { binCounts[b] = (binCounts[b] || 0) + 1; });
+          binSummary = Object.entries(binCounts).map(([b, c]) => `${b} (${c})`).join(', ');
+        }
         return {
           "S.No": poRow ? poRow["Sno"] || poRow["S.No"] || "" : "",
           "Brand SKU Code": poRow ? poRow["Brand SKU Code"] || "" : sku,
@@ -149,7 +169,8 @@ export const useGRNGenerator = () => {
           "Status": status,
           "QC Status": qcStatus,
           "Remarks": remarks,
-          "Bin": "",
+          "Bin": binSummary,
+          "BinLocations": binListPivot[sku] || [],
           "Unit Price": poRow ? poRow["Unit Price"] || "" : "",
           "Amount": poRow ? poRow["Amount"] || "" : ""
         };
