@@ -157,6 +157,8 @@ export const useGRNGenerator = () => {
           "S.No": poRow ? poRow["Sno"] || poRow["S.No"] || "" : "",
           "Brand SKU Code": poRow ? poRow["Brand SKU Code"] || "" : sku,
           "KNOT SKU Code": poRow ? poRow["KNOT SKU Code"] || "" : "",
+          "Brand SKU": poRow ? poRow["Brand SKU Code"] || "" : sku,
+          "KNOT SKU": poRow ? poRow["KNOT SKU Code"] || "" : "",
           "Size": poRow ? poRow["Size"] || "" : "",
           "Colors": poRow ? poRow["Colors"] || "" : "",
           "Ordered Qty": orderedQty,
