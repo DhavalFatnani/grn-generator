@@ -188,10 +188,7 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
                 ref={inwardDateRef}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer bg-white"
                 required
-                onClick={e => e.stopPropagation()} // Prevent bubbling to parent div
-                readOnly={false}
               />
-              <span className="absolute inset-0" style={{ pointerEvents: 'none' }}></span>
             </div>
           </div>
         </div>
