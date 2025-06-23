@@ -1025,14 +1025,16 @@ class GRNExporter {
     const qcStatusText = this.getQCStatusText(item);
     const statusClass = this.getStatusClass(item.Status);
     const statusText = this.getStatusText(item.Status);
-    
+    // Map correct keys for export
+    const brandSku = item["Brand SKU"] || item["Brand SKU Code"] || '-';
+    const knotSku = item["KNOT SKU"] || item["KNOT SKU Code"] || '-';
     return `
       <tr>
         <td>${serialNo}</td>
-        <td class="sku-cell">${item["Brand SKU"] || '-'}</td>
-        <td class="sku-cell">${item["KNOT SKU"] || '-'}</td>
+        <td class="sku-cell">${brandSku}</td>
+        <td class="sku-cell">${knotSku}</td>
         <td>${item["Size"] || '-'}</td>
-        <td>${item["Color"] || '0'}</td>
+        <td>${item["Color"] || '-'}</td>
         <td class="qty-cell">${item["Ordered Qty"] || 0}</td>
         <td class="qty-cell">${item["Received Qty"] || 0}</td>
         ${this.grnHeaderInfo.qcPerformed ? `
@@ -1939,7 +1941,7 @@ class GRNExporter {
         <td class="sku-cell">${item["Brand SKU"] || '-'}</td>
         <td class="sku-cell">${item["KNOT SKU"] || '-'}</td>
         <td>${item["Size"] || '-'}</td>
-        <td>${item["Color"] || '0'}</td>
+        <td>${item["Color"] || '-'}</td>
         <td class="qty-cell">${item["Ordered Qty"] || 0}</td>
         <td class="qty-cell">${item["Received Qty"] || 0}</td>
         ${this.grnHeaderInfo.qcPerformed ? `
