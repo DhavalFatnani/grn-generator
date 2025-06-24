@@ -120,7 +120,6 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
       
       <div className="mb-6">
         <div className="flex justify-between items-center mb-2">
-          <h2 className="text-xl font-semibold text-gray-800">GRN Header Information</h2>
           {testMode && (
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
@@ -146,9 +145,6 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
             </div>
           )}
         </div>
-        <p className="text-sm text-gray-600">
-          Please verify and complete the following information. Fields marked with <span className="text-blue-500">*</span> are required.
-        </p>
       </div>
 
       {/* Required GRN Information */}

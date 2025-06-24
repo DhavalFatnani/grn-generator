@@ -10,6 +10,8 @@ import { downloadCSV, downloadHTML, downloadPDF } from "./utils/exportUtils";
 import { getStatusColor } from "./utils/helpers.js";
 import { DEFAULT_VALUES, INITIAL_GRN_HEADER, TEST_DATA_TEMPLATES } from "./utils/constants.js";
 
+const THEME_KEY = 'grnTheme';
+
 const GRNGenerator = () => {
   // File upload state and handlers
   const {
@@ -58,6 +60,13 @@ const GRNGenerator = () => {
     // Persist test mode in localStorage
     return localStorage.getItem('grnTestMode') === 'true';
   });
+
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
+
+  useEffect(() => {
+    document.body.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   // Keyboard shortcut: Ctrl+Shift+T (or Cmd+Shift+T)
   useEffect(() => {
@@ -219,151 +228,166 @@ const GRNGenerator = () => {
   }, [clearAllData]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
+      {/* Modern Professional Sticky Header */}
+      <header className="sticky-header">
+        <div className="flex items-center gap-4">
+          <img src="/logo.png" alt="KNOT Logo" style={{ height: 32, width: 32, borderRadius: 8 }} />
+          <span className="logo">GRN Generator</span>
+        </div>
+        <div className="text-sm text-gray-500 font-medium">Professional Inventory Management</div>
+      </header>
       {/* Test Mode Banner */}
       {testMode && (
         <div className="fixed top-0 left-0 w-full z-50 bg-yellow-200 text-yellow-900 text-center py-2 font-semibold shadow animate-fade-in">
-          🧪 Test Mode Active (toggle with Ctrl+Shift+T or Cmd+Shift+T/⏎)
+          Test Mode Active (toggle with Ctrl+Shift+T or Cmd+Shift+T/⏎)
         </div>
       )}
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-6">
-            GRN Generator
-          </h1>
-          
-          {/* File Upload Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-700 mb-4">
-              Upload Files
-          </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FileUploadBox
-              title="Purchase Order"
-              onFileUpload={handlePurchaseOrderUpload}
+      <div className="py-8">
+        {/* Main Card - single card for all content */}
+        <div className="main-content w-full">
+          {/* Upload Files Section */}
+          <section className="px-8 py-10 border-b border-gray-100">
+            <h2 className="text-2xl font-bold mb-6">Upload Files</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <FileUploadBox
+                title="Purchase Order"
+                onFileUpload={handlePurchaseOrderUpload}
                 onClear={() => clearData('purchaseOrder')}
                 data={data.purchaseOrder}
                 loading={fileLoading}
-              required
-            />
-            <FileUploadBox
+                required
+                sampleButtonSize="small"
+              />
+              <FileUploadBox
                 title="Put Away"
-              onFileUpload={handlePutAwayUpload}
+                onFileUpload={handlePutAwayUpload}
                 onClear={() => clearData('putAway')}
                 data={data.putAway}
                 loading={fileLoading}
-              required
-            />
-            <FileUploadBox
+                required
+                sampleButtonSize="small"
+              />
+              <FileUploadBox
                 title="QC Fail"
                 onFileUpload={handleQcFailUpload}
                 onClear={() => clearData('qcFail')}
                 data={data.qcFail}
                 loading={fileLoading}
-              required={false}
-            />
-          </div>
-        </div>
+                required={false}
+                sampleButtonSize="small"
+              />
+            </div>
+          </section>
 
-          {/* File Upload Guidelines section */}
-          <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">
-            <h2 className="text-lg font-semibold text-blue-800 mb-2">File Upload Guidelines</h2>
-            <ul className="list-disc pl-6 text-sm text-blue-900 space-y-1">
-              <li><strong>Purchase Order:</strong> Upload the original PO file as downloaded from your ERP. It should contain all metadata, vendor/brand info, and a table with columns like <em>Sno, Brand SKU Code, Size, Colors, Quantity, Unit Price, Amount</em>. Do not remove or edit header rows.</li>
+          {/* File Upload Guidelines section (alt background, extra spacing) */}
+          <section className="section-alt px-8 py-8 border-b border-gray-100 mt-14 mb-14">
+            <h2 className="text-2xl font-bold mb-4">File Upload Guidelines</h2>
+            <ul className="list-disc pl-6 text-base text-gray-700 space-y-1">
+              <li><strong>Purchase Order:</strong> It should contain all metadata, vendor/brand info, and a table with columns like <em>Sno, Brand SKU Code, Size, Colors, Quantity, Unit Price, Amount</em>. Do not remove or edit header rows.</li>
               <li><strong>Put Away:</strong> Upload a CSV with columns <em>SKU</em> and <em>BIN</em>. Each row represents a single SKU that has been received and put away in its bin location. No extra metadata is needed.</li>
               <li><strong>QC Fail:</strong> Upload a CSV with columns <em>SKU</em> and <em>REMARK</em>. List only SKUs that failed QC, with a brief remark for each.</li>
               <li>All files must be in <strong>CSV</strong> format. Excel files should be saved/exported as CSV before uploading.</li>
               <li>Do not modify the structure or remove any columns from the original files.</li>
             </ul>
-          </div>
+          </section>
 
           {/* Header Form */}
-          <HeaderForm
-            key={testMode ? 'test' : 'prod'}
-            grnHeaderInfo={grnHeaderInfo}
-            onHeaderChange={handleHeaderChange}
-            previousValues={previousValues}
-            setPreviousValues={setPreviousValues}
-            testMode={testMode}
-          />
+          <section className="px-8 py-10 border-b bg-white border-gray-100 mt-14 mb-14">
+            <h2 className="text-2xl font-bold">GRN Header Information</h2>
+            <p className="text-sm text-gray-600 mt-2 mb-6">
+              Please verify and complete the following information. Fields marked with <span className="text-blue-500">*</span> are required.
+            </p>
+            <HeaderForm
+              key={testMode ? 'test' : 'prod'}
+              grnHeaderInfo={grnHeaderInfo}
+              onHeaderChange={handleHeaderChange}
+              previousValues={previousValues}
+              setPreviousValues={setPreviousValues}
+              testMode={testMode}
+            />
+          </section>
 
           {/* Generate Button */}
-          <div className="flex justify-center mb-6 mt-8">
-          <button
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded shadow transition-colors"
-            onClick={handleGenerateGRN}
+          <div className="flex justify-center mb-14 mt-8">
+            <button
+              className="btn"
+              onClick={handleGenerateGRN}
               disabled={fileLoading || grnLoading || !data.purchaseOrder.length || !data.putAway.length}
-          >
+            >
               {grnLoading ? "Generating GRN..." : "Generate GRN"}
-          </button>
-        </div>
+            </button>
+          </div>
 
           {/* Error Display */}
           {(fileErrors.length > 0 || grnErrors.length > 0) && (
-            <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-              <h3 className="font-semibold mb-2">Errors:</h3>
-              <ul className="list-disc list-inside space-y-1">
+            <section className="mx-8 mb-10 p-4 rounded border bg-red-100 border-red-400 text-red-700">
+              <h3 className="text-xl font-bold mb-2">Errors</h3>
+              <ul className="list-disc list-inside space-y-1 text-base">
                 {[...fileErrors, ...grnErrors].map((error, index) => (
                   <li key={index}>{error}</li>
                 ))}
               </ul>
-            </div>
+            </section>
           )}
 
-          {/* Modern Sticky Export Bar - must be a direct child of the main app container */}
+          {/* Modern Sticky Export Bar - floating and visually distinct */}
           {grnData.length > 0 && (
-            <div className="fixed bottom-0 left-0 w-full z-40 bg-white border-t border-gray-200 shadow-lg py-3 px-4 flex flex-col sm:flex-row sm:justify-center sm:items-center gap-3 sm:gap-6 animate-fade-in">
+            <div className="sticky-export-bar animate-fade-in" style={{ zIndex: 300 }}>
               <button
                 type="button"
                 onClick={handleDownloadCSV}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-5 rounded-full shadow transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="btn"
                 aria-label="Download CSV"
               >
-                <span role="img" aria-label="CSV">📊</span> Download CSV
+                Download CSV
               </button>
               <button
                 type="button"
                 onClick={handleDownloadGRN}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-5 rounded-full shadow transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="btn secondary"
                 aria-label="Download GRN (HTML)"
               >
-                <span role="img" aria-label="HTML">🌐</span> Download GRN (HTML)
+                Download GRN (HTML)
               </button>
               <button
                 type="button"
                 onClick={handleDownloadPDF}
-                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-5 rounded-full shadow transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-300"
+                className="btn secondary"
                 aria-label="Download PDF"
               >
-                <span role="img" aria-label="PDF">📄</span> Download PDF
+                Download PDF
               </button>
               <button
                 type="button"
                 onClick={handleClearAll}
-                className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-5 rounded-full shadow transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                className="btn secondary"
                 aria-label="Clear All"
               >
-                <span role="img" aria-label="Clear">🧹</span> Clear All
+                Clear All
               </button>
-          </div>
-        )}
-
-          {/* GRN Display Table */}
-        {grnData.length > 0 && (
-            <GRNTable
-              data={grnData}
-              filteredData={filteredData}
-              getStatusColor={getStatusColor}
-              grnHeaderInfo={grnHeaderInfo}
-              activeFilters={activeFilters}
-              search={search}
-              onFilterChange={handleFilterChange}
-              onSearchChange={setSearch}
-              onClearFilters={handleClearFilters}
-              onDownloadFiltered={handleDownloadFilteredCSV}
-            />
+            </div>
           )}
-          </div>
+
+          {/* GRN Display Table (alt background, extra spacing) */}
+          {grnData.length > 0 && (
+            <section className="section-alt px-8 pb-10 mt-14 mb-8">
+              <h2 className="text-2xl font-bold mb-6">GRN Table</h2>
+              <GRNTable
+                data={grnData}
+                filteredData={filteredData}
+                getStatusColor={getStatusColor}
+                grnHeaderInfo={grnHeaderInfo}
+                activeFilters={activeFilters}
+                search={search}
+                onFilterChange={handleFilterChange}
+                onSearchChange={setSearch}
+                onClearFilters={handleClearFilters}
+                onDownloadFiltered={handleDownloadFilteredCSV}
+              />
+            </section>
+          )}
+        </div>
       </div>
 
       {/* Data Preview Modal */}
