@@ -63,6 +63,8 @@ const GRNGenerator = () => {
 
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
 
+  const [acknowledgeOnly, setAcknowledgeOnly] = useState(false);
+
   useEffect(() => {
     document.body.classList.toggle('dark', theme === 'dark');
     localStorage.setItem(THEME_KEY, theme);
@@ -208,14 +210,15 @@ const GRNGenerator = () => {
   // Generate GRN data
   const handleGenerateGRN = useCallback(() => {
     generateGRN({
-      purchaseOrderData: data.purchaseOrder,
+      purchaseOrderData: acknowledgeOnly ? [] : data.purchaseOrder,
       putAwayData: data.putAway,
       qcFailData: data.qcFail,
       skuCodeType,
       grnHeaderInfo,
       columnMapping,
+      acknowledgeOnly,
     });
-  }, [data, grnHeaderInfo, columnMapping, generateGRN, skuCodeType]);
+  }, [data, grnHeaderInfo, columnMapping, generateGRN, skuCodeType, acknowledgeOnly]);
 
   // Clear all data
   const handleClearAll = useCallback(() => {
@@ -248,17 +251,28 @@ const GRNGenerator = () => {
         <div className="main-content w-full">
           {/* Upload Files Section */}
           <section className="px-8 py-10 border-b border-gray-100">
+            <label className="checkbox-row mb-8 bg-[#f6f8fa] border border-gray-200 rounded-lg px-4 py-3" style={{ maxWidth: 420 }}>
+              <input
+                type="checkbox"
+                checked={acknowledgeOnly}
+                onChange={e => setAcknowledgeOnly(e.target.checked)}
+                className="accent-blue-600"
+              />
+              <span>No Purchase Order (Acknowledge Only)</span>
+            </label>
             <h2 className="text-2xl font-bold mb-6">Upload Files</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <FileUploadBox
-                title="Purchase Order"
-                onFileUpload={handlePurchaseOrderUpload}
-                onClear={() => clearData('purchaseOrder')}
-                data={data.purchaseOrder}
-                loading={fileLoading}
-                required
-                sampleButtonSize="small"
-              />
+              {!acknowledgeOnly && (
+                <FileUploadBox
+                  title="Purchase Order"
+                  onFileUpload={handlePurchaseOrderUpload}
+                  onClear={() => clearData('purchaseOrder')}
+                  data={data.purchaseOrder}
+                  loading={fileLoading}
+                  required
+                  sampleButtonSize="small"
+                />
+              )}
               <FileUploadBox
                 title="Put Away"
                 onFileUpload={handlePutAwayUpload}
@@ -313,7 +327,7 @@ const GRNGenerator = () => {
             <button
               className="btn"
               onClick={handleGenerateGRN}
-              disabled={fileLoading || grnLoading || !data.purchaseOrder.length || !data.putAway.length}
+              disabled={fileLoading || grnLoading || !data.putAway.length || (!acknowledgeOnly && !data.purchaseOrder.length)}
             >
               {grnLoading ? "Generating GRN..." : "Generate GRN"}
             </button>

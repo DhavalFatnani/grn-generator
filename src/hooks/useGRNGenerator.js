@@ -14,13 +14,53 @@ export const useGRNGenerator = () => {
   const [errors, setErrors] = useState([]);
 
   const generateGRN = useCallback(({
-    purchaseOrderData,
-    putAwayData,
-    qcFailData,
+    purchaseOrderData = [],
+    putAwayData = [],
+    qcFailData = [],
     skuCodeType = 'BRAND',
-    grnHeaderInfo,
+    grnHeaderInfo = {},
     columnMapping = {},
+    acknowledgeOnly = false,
   }) => {
+    if (acknowledgeOnly) {
+      // --- Acknowledge Only Mode ---
+      // Merge SKUs from Put Away and QC Fail
+      const putawayPivot = {};
+      putAwayData.forEach(row => {
+        const sku = (row["SKU"] || row["sku"] || '').trim();
+        if (!sku) return;
+        putawayPivot[sku] = (putawayPivot[sku] || 0) + 1;
+      });
+      const qcFailPivot = {};
+      qcFailData.forEach(row => {
+        const sku = (row["SKU"] || row["sku"] || '').trim();
+        if (!sku) return;
+        qcFailPivot[sku] = (qcFailPivot[sku] || 0) + 1;
+      });
+      // Union of all SKUs
+      const allSKUs = Array.from(new Set([
+        ...Object.keys(putawayPivot),
+        ...Object.keys(qcFailPivot)
+      ]));
+      const grnRows = allSKUs.map((sku, idx) => {
+        const receivedQty = putawayPivot[sku] || 0;
+        const failedQCQty = qcFailPivot[sku] || 0;
+        const passedQCQty = Math.max(0, receivedQty - failedQCQty);
+        return {
+          "S.No": idx + 1,
+          "SKU": sku,
+          "Bin": '',
+          "Received Qty": receivedQty,
+          "Failed QC Qty": failedQCQty,
+          "Passed QC Qty": passedQCQty,
+          "Remarks": failedQCQty > 0 ? 'QC Failed' : '',
+        };
+      });
+      setGrnData(grnRows);
+      setErrors([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setErrors([]);
 

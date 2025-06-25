@@ -303,17 +303,15 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
         
         {/* QC Performed Checkbox */}
         <div className="mb-4">
-          <label className="flex items-center space-x-2 cursor-pointer">
+          <label className="checkbox-row cursor-pointer">
             <input
               type="checkbox"
               checked={grnHeaderInfo.qcPerformed || false}
               onChange={handleQCCheckboxChange}
               name="qcPerformed"
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              className="text-blue-600 focus:ring-blue-500 border-gray-300 rounded accent-blue-600"
             />
-            <span className="text-sm font-medium text-gray-700">
-              Quality Control (QC) has been performed
-            </span>
+            <span>Quality Control (QC) has been performed</span>
           </label>
         </div>
 
