@@ -107,8 +107,8 @@ export const useGRNGenerator = () => {
         // If Quantity column exists, use it, else count as 1
         const qty = parseQuantity(row["Quantity"] || row["Put Away Quantity"] || 1);
         putawayPivot[sku] += qty;
-        // Collect bin locations
-        const bin = row["BIN"] || row["Bin"] || row["Bin Location"] || row["BIN LOCATION"] || "";
+        // Collect bin locations (prefer 'bin location', but support legacy fields)
+        const bin = row["bin location"] || row["Bin Location"] || row["BIN LOCATION"] || row["BIN"] || row["Bin"] || row["Location"] || row["Storage Location"] || "";
         if (bin) {
           if (!binPivot[sku]) binPivot[sku] = new Set();
           binPivot[sku].add(bin);

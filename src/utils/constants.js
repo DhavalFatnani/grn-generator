@@ -177,7 +177,7 @@ export const COLUMN_MAPPINGS = {
   putAway: {
     skuCode: ["SKU ID", "SKU", "Brand SKU Code"],
     knotSku: ["KNOT SKU Code", "KNOT SKU"],
-    bin: ["Bin", "Location", "Storage Location"],
+    bin: ["bin location", "Bin Location", "BIN LOCATION", "Location", "Storage Location"],
     quantity: ["Quantity", "Qty", "Put Away Qty"]
   },
   qcFail: {
@@ -195,7 +195,7 @@ export const FILE_VALIDATION = {
   allowedTypes: ['.csv', '.xlsx', '.xls'],
   requiredColumns: {
     purchaseOrder: ['Brand SKU Code', 'Quantity'],
-    putAway: ['SKU', 'BIN'],
+    putAway: ['SKU', 'bin location'],
     qcFail: ['SKU']
   }
 };
