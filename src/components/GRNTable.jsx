@@ -155,6 +155,25 @@ export const GRNTable = ({
     </div>
   ) : null;
 
+  // Determine if PO columns should be shown
+  const showPOColumns = filteredData.some(item => typeof item["Ordered Qty"] !== 'undefined');
+  // Determine which SKU code type to show if no PO
+  let showBrandSKU = true, showKnotSKU = true, showSize = true, showColors = true;
+  let skuDataHeader = 'SKU';
+  let showSkuData = false;
+  if (!showPOColumns) {
+    // If all rows have only Brand SKU, show only Brand; if only KNOT, show only KNOT
+    const allHaveBrand = filteredData.every(item => item["Brand SKU"] && !item["KNOT SKU"]);
+    const allHaveKnot = filteredData.every(item => item["KNOT SKU"] && !item["Brand SKU"]);
+    showBrandSKU = allHaveBrand;
+    showKnotSKU = allHaveKnot;
+    showSize = false;
+    showColors = false;
+    // Show SKU data column and set header
+    showSkuData = true;
+    skuDataHeader = allHaveKnot ? 'Knot Code' : 'Brand Code';
+  }
+
   return (
     <div ref={tableRef} className="space-y-6 relative">
       {/* Summary Cards */}
@@ -281,12 +300,25 @@ export const GRNTable = ({
           <thead className="bg-gray-50 sticky top-0 z-10 shadow">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S.No</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brand SKU</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">KNOT SKU</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Colors</th>
+              {showSkuData && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{skuDataHeader}</th>
+              )}
+              {showBrandSKU && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brand SKU</th>
+              )}
+              {showKnotSKU && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">KNOT SKU</th>
+              )}
+              {showSize && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+              )}
+              {showColors && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Colors</th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bin</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ordered Qty</th>
+              {showPOColumns && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ordered Qty</th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Received Qty</th>
               {qcPerformed && (
                 <>
@@ -294,8 +326,12 @@ export const GRNTable = ({
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed QC Qty</th>
                 </>
               )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shortage Qty</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Excess Qty</th>
+              {showPOColumns && (
+                <>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shortage Qty</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Excess Qty</th>
+                </>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               {qcPerformed && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QC Status</th>
@@ -308,10 +344,21 @@ export const GRNTable = ({
               <React.Fragment key={index}>
                 <tr className={getRowClass(item, index) + " hover:bg-blue-50 transition-colors duration-100"}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["S.No"]}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["Brand SKU Code"]}>{item["Brand SKU Code"]}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["KNOT SKU Code"]}>{item["KNOT SKU Code"]}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Size"]}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Colors"]}</td>
+                  {showSkuData && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["SKU Data"]}</td>
+                  )}
+                  {showBrandSKU && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["Brand SKU Code"] || item["Brand SKU"]}>{item["Brand SKU Code"] || item["Brand SKU"]}</td>
+                  )}
+                  {showKnotSKU && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["KNOT SKU Code"] || item["KNOT SKU"]}>{item["KNOT SKU Code"] || item["KNOT SKU"]}</td>
+                  )}
+                  {showSize && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Size"]}</td>
+                  )}
+                  {showColors && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Colors"]}</td>
+                  )}
                   <td className={
                     (item["BinLocations"] && item["BinLocations"].length > 0)
                       ? "px-6 py-4 whitespace-nowrap text-sm text-blue-900 cursor-pointer underline"
@@ -332,7 +379,9 @@ export const GRNTable = ({
                       "-"
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Ordered Qty"]}</td>
+                  {showPOColumns && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Ordered Qty"]}</td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Received Qty"]}</td>
                   {qcPerformed && (
                     <>
@@ -340,8 +389,12 @@ export const GRNTable = ({
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Failed QC Qty"]}</td>
                     </>
                   )}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Shortage Qty"]}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Excess Qty"]}</td>
+                  {showPOColumns && (
+                    <>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Shortage Qty"]}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Excess Qty"]}</td>
+                    </>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span 
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${customGetStatusColor ? customGetStatusColor(item.Status) : getStatusColor(item.Status)}`}

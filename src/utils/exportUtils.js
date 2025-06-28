@@ -183,13 +183,16 @@ class GRNExporter {
       csvData = [headers, ...dataRows];
     } else {
       const headers = [
-        "S.No", "Brand SKU", "KNOT SKU", "Size", "Color", 
-        "Ordered Qty", "Received Qty"
+        "S.No", "Brand SKU", "KNOT SKU", "Size", "Color"
       ];
+      if (this.hasPOColumns()) headers.push("Ordered Qty");
+      headers.push("Received Qty");
       if (this.grnHeaderInfo.qcPerformed) {
         headers.push("Passed QC Qty", "Failed QC Qty");
       }
-      headers.push("Shortage Qty", "Excess Qty");
+      if (this.hasPOColumns()) {
+        headers.push("Shortage Qty", "Excess Qty");
+      }
       if (this.grnHeaderInfo.qcPerformed) {
         headers.push("QC Status");
       }
@@ -200,20 +203,22 @@ class GRNExporter {
           this.getBrandSku(item),
           this.getKnotSku(item),
           item["Size"] || '',
-          item["Color"] || '',
-          item["Ordered Qty"] || 0,
-          item["Received Qty"] || 0
+          item["Color"] || ''
         ];
+        if (this.hasPOColumns()) row.push(item["Ordered Qty"] || 0);
+        row.push(item["Received Qty"] || 0);
         if (this.grnHeaderInfo.qcPerformed) {
           row.push(
             item["Passed QC Qty"] || 0,
             item["Failed QC Qty"] || 0
           );
         }
-        row.push(
-          item["Shortage Qty"] || 0,
-          item["Excess Qty"] || 0
-        );
+        if (this.hasPOColumns()) {
+          row.push(
+            item["Shortage Qty"] || 0,
+            item["Excess Qty"] || 0
+          );
+        }
         if (this.grnHeaderInfo.qcPerformed) {
           row.push(item["QC Status"] || '');
         }
@@ -1998,10 +2003,27 @@ class GRNExporter {
 
   // Helper to get correct SKU values
   getBrandSku(item) {
-    return item["Brand SKU"] || item["Brand SKU Code"] || '';
+    return (
+      item["Brand SKU"] ||
+      item["Brand SKU Code"] ||
+      item["SKU"] ||
+      item["SKU ID"] ||
+      ''
+    );
   }
   getKnotSku(item) {
-    return item["KNOT SKU"] || item["KNOT SKU Code"] || '';
+    return (
+      item["KNOT SKU"] ||
+      item["KNOT SKU Code"] ||
+      item["SKU"] ||
+      item["SKU ID"] ||
+      ''
+    );
+  }
+
+  // Helper to check if PO columns should be included
+  hasPOColumns() {
+    return this.grnData.some(item => typeof item["Ordered Qty"] !== 'undefined');
   }
 }
 

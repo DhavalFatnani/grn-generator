@@ -69,22 +69,16 @@ export const useGRNGenerator = () => {
       const validation = validateRequiredFields(grnHeaderInfo, REQUIRED_FIELDS);
       if (!validation.isValid) {
         setErrors([ERROR_MESSAGES.grnGeneration.missingFields]);
-      setLoading(false);
-      return;
-    }
+        setLoading(false);
+        return;
+      }
 
       // Validate data arrays
-      if (!purchaseOrderData?.length) {
-        setErrors(["Please upload a valid Purchase Order sheet"]);
-      setLoading(false);
-      return;
-    }
-
       if (!putAwayData?.length) {
         setErrors(["Please upload a valid Put Away sheet"]);
-      setLoading(false);
-      return;
-    }
+        setLoading(false);
+        return;
+      }
 
       const qcFailDataArray = qcFailData || [];
 
@@ -132,12 +126,14 @@ export const useGRNGenerator = () => {
 
       // 3. Pivot PO by SKU (for lookup)
       const poPivot = {};
-      purchaseOrderData.forEach(row => {
-        const sku = (row["Brand SKU Code"] || row["KNOT SKU Code"] || row["SKU"] || row["SKU ID"] || "").toString().trim().toUpperCase();
-        if (!sku) return;
-        if (!poPivot[sku]) poPivot[sku] = { ...row, __qty: 0 };
-        poPivot[sku].__qty += parseQuantity(row["Quantity"]);
-      });
+      if (purchaseOrderData && purchaseOrderData.length > 0) {
+        purchaseOrderData.forEach(row => {
+          const sku = (row["Brand SKU Code"] || row["KNOT SKU Code"] || row["SKU"] || row["SKU ID"] || "").toString().trim().toUpperCase();
+          if (!sku) return;
+          if (!poPivot[sku]) poPivot[sku] = { ...row, __qty: 0 };
+          poPivot[sku].__qty += parseQuantity(row["Quantity"]);
+        });
+      }
 
       // 4. Union of all SKUs
       const allSkus = new Set([
@@ -153,16 +149,23 @@ export const useGRNGenerator = () => {
         const receivedQty = (putawayPivot[sku] || 0) + (qcFailPivot[sku] || 0);
         const failedQCQty = qcFailPivot[sku] || 0;
         const passedQCQty = Math.max(0, receivedQty - failedQCQty);
-        const shortageQty = Math.max(0, orderedQty - receivedQty);
-        const excessQty = Math.max(0, receivedQty - orderedQty);
-        const notOrderedQty = orderedQty === 0 ? receivedQty : 0;
+        const notOrderedQty = (!poRow || orderedQty === 0) ? receivedQty : 0;
+
+        // Only calculate shortage/excess if PO exists
+        const shortageQty = (poRow && orderedQty > 0) ? Math.max(0, orderedQty - receivedQty) : undefined;
+        const excessQty = (poRow && orderedQty > 0) ? Math.max(0, receivedQty - orderedQty) : undefined;
 
         // Status logic
         let status = "Received";
-        if (shortageQty > 0) status = "Shortage";
-        if (excessQty > 0) status = "Excess";
-        if (receivedQty === 0) status = "Not Received";
-        if (orderedQty === 0 && receivedQty > 0) status = "Excess Receipt";
+        if (poRow && orderedQty > 0) {
+          if (shortageQty > 0) status = "Shortage";
+          if (excessQty > 0) status = "Excess";
+          if (receivedQty === 0) status = "Not Received";
+        } else if (receivedQty > 0) {
+          status = "Excess Receipt";
+        } else if (receivedQty === 0) {
+          status = "Not Received";
+        }
 
         // QC Status
         let qcStatus = "Not Performed";
@@ -185,7 +188,32 @@ export const useGRNGenerator = () => {
         if (receivedQty === 0) remarks += "Not Received. ";
         remarks = remarks.trim();
 
-        // Use PO row for meta fields if available, else blank
+        // Use PO row for meta fields if available, else fallback to putAway/QCFail data
+        let putAwayRow = filteredPutAwayData.find(row => {
+          const rowSku = (row["SKU ID"] || row["SKU"] || row["Brand SKU Code"] || row["KNOT SKU Code"] || "").toString().trim().toUpperCase();
+          return rowSku === sku;
+        });
+        let qcFailRow = filteredQcFailData.find(row => {
+          const rowSku = (row["SKU"] || row["SKU ID"] || row["Brand SKU Code"] || row["KNOT SKU Code"] || "").toString().trim().toUpperCase();
+          return rowSku === sku;
+        });
+        // Prefer putAwayRow, then qcFailRow
+        const bestRow = putAwayRow || qcFailRow || {};
+        // Brand SKU Code and KNOT SKU Code fallback logic
+        let brandSkuCode, knotSkuCode;
+        if (poRow) {
+          brandSkuCode = poRow["Brand SKU Code"] || sku;
+          knotSkuCode = poRow["KNOT SKU Code"] || "";
+        } else {
+          if (skuCodeType === 'KNOT') {
+            knotSkuCode = bestRow["SKU"] || bestRow["SKU ID"] || bestRow["KNOT SKU Code"] || bestRow["Brand SKU Code"] || sku;
+            brandSkuCode = '';
+          } else {
+            brandSkuCode = bestRow["SKU"] || bestRow["SKU ID"] || bestRow["Brand SKU Code"] || bestRow["KNOT SKU Code"] || sku;
+            knotSkuCode = '';
+          }
+        }
+
         // Bin summary: e.g., 'A1 (2), B2 (3)'
         let binSummary = '';
         if (binListPivot[sku] && binListPivot[sku].length > 0) {
@@ -193,29 +221,81 @@ export const useGRNGenerator = () => {
           binListPivot[sku].forEach(b => { binCounts[b] = (binCounts[b] || 0) + 1; });
           binSummary = Object.entries(binCounts).map(([b, c]) => `${b} (${c})`).join(', ');
         }
-        return {
-          "S.No": poRow ? poRow["Sno"] || poRow["S.No"] || "" : "",
-          "Brand SKU Code": poRow ? poRow["Brand SKU Code"] || "" : sku,
-          "KNOT SKU Code": poRow ? poRow["KNOT SKU Code"] || "" : "",
-          "Brand SKU": poRow ? poRow["Brand SKU Code"] || "" : sku,
-          "KNOT SKU": poRow ? poRow["KNOT SKU Code"] || "" : "",
-          "Size": poRow ? poRow["Size"] || "" : "",
-          "Colors": poRow ? poRow["Colors"] || "" : "",
-          "Ordered Qty": orderedQty,
-          "Received Qty": receivedQty,
-          "Passed QC Qty": passedQCQty,
-          "Failed QC Qty": failedQCQty,
-          "Shortage Qty": shortageQty,
-          "Excess Qty": excessQty,
-          "Not Ordered Qty": notOrderedQty,
-          "Status": status,
-          "QC Status": qcStatus,
-          "Remarks": remarks,
-          "Bin": binSummary,
-          "BinLocations": binListPivot[sku] || [],
-          "Unit Price": poRow ? poRow["Unit Price"] || "" : "",
-          "Amount": poRow ? poRow["Amount"] || "" : ""
-        };
+        // Build row object
+        let row;
+        if (!poRow) {
+          // No PO: Only show the selected SKU code type
+          if (skuCodeType === 'KNOT') {
+            row = {
+              "S.No": "",
+              "SKU Data": bestRow["SKU"] || bestRow["SKU ID"] || '',
+              "KNOT SKU Code": knotSkuCode,
+              "KNOT SKU": knotSkuCode,
+              "Size": bestRow["Size"] || "",
+              "Colors": bestRow["Colors"] || "",
+              "Received Qty": receivedQty,
+              "Passed QC Qty": passedQCQty,
+              "Failed QC Qty": failedQCQty,
+              "Not Ordered Qty": notOrderedQty,
+              "Status": status,
+              "QC Status": qcStatus,
+              "Remarks": remarks,
+              "Bin": binSummary,
+              "BinLocations": binListPivot[sku] || [],
+              "Unit Price": bestRow["Unit Price"] || "",
+              "Amount": bestRow["Amount"] || ""
+            };
+          } else {
+            row = {
+              "S.No": "",
+              "SKU Data": bestRow["SKU"] || bestRow["SKU ID"] || '',
+              "Brand SKU Code": brandSkuCode,
+              "Brand SKU": brandSkuCode,
+              "Size": bestRow["Size"] || "",
+              "Colors": bestRow["Colors"] || "",
+              "Received Qty": receivedQty,
+              "Passed QC Qty": passedQCQty,
+              "Failed QC Qty": failedQCQty,
+              "Not Ordered Qty": notOrderedQty,
+              "Status": status,
+              "QC Status": qcStatus,
+              "Remarks": remarks,
+              "Bin": binSummary,
+              "BinLocations": binListPivot[sku] || [],
+              "Unit Price": bestRow["Unit Price"] || "",
+              "Amount": bestRow["Amount"] || ""
+            };
+          }
+        } else {
+          // With PO: show both columns as before
+          row = {
+            "S.No": poRow["Sno"] || poRow["S.No"] || "",
+            "Brand SKU Code": brandSkuCode,
+            "KNOT SKU Code": knotSkuCode,
+            "Brand SKU": brandSkuCode,
+            "KNOT SKU": knotSkuCode,
+            "Size": poRow["Size"] || "",
+            "Colors": poRow["Colors"] || "",
+            "Received Qty": receivedQty,
+            "Passed QC Qty": passedQCQty,
+            "Failed QC Qty": failedQCQty,
+            "Not Ordered Qty": notOrderedQty,
+            "Status": status,
+            "QC Status": qcStatus,
+            "Remarks": remarks,
+            "Bin": binSummary,
+            "BinLocations": binListPivot[sku] || [],
+            "Unit Price": poRow["Unit Price"] || "",
+            "Amount": poRow["Amount"] || ""
+          };
+        }
+        // Only add Ordered/Shortage/Excess if PO exists
+        if (poRow && orderedQty > 0) {
+          row["Ordered Qty"] = orderedQty;
+          row["Shortage Qty"] = shortageQty;
+          row["Excess Qty"] = excessQty;
+        }
+        return row;
       });
 
       setGrnData(finalGrnData);

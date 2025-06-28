@@ -176,15 +176,15 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
               role="button"
               style={{ outline: 'none' }}
             >
-              <input
-                type="date"
-                value={grnHeaderInfo.inwardDate}
+            <input
+              type="date"
+              value={grnHeaderInfo.inwardDate}
                 onChange={onHeaderChange}
-                name="inwardDate"
+              name="inwardDate"
                 ref={inwardDateRef}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer bg-white"
-                required
-              />
+              required
+            />
             </div>
           </div>
         </div>

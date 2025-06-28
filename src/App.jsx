@@ -263,35 +263,35 @@ const GRNGenerator = () => {
             <h2 className="text-2xl font-bold mb-6">Upload Files</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {!acknowledgeOnly && (
-                <FileUploadBox
-                  title="Purchase Order"
-                  onFileUpload={handlePurchaseOrderUpload}
-                  onClear={() => clearData('purchaseOrder')}
-                  data={data.purchaseOrder}
-                  loading={fileLoading}
-                  required
+            <FileUploadBox
+              title="Purchase Order"
+              onFileUpload={handlePurchaseOrderUpload}
+                onClear={() => clearData('purchaseOrder')}
+                data={data.purchaseOrder}
+                loading={fileLoading}
+              required
                   sampleButtonSize="small"
-                />
+            />
               )}
-              <FileUploadBox
+            <FileUploadBox
                 title="Put Away"
-                onFileUpload={handlePutAwayUpload}
+              onFileUpload={handlePutAwayUpload}
                 onClear={() => clearData('putAway')}
                 data={data.putAway}
                 loading={fileLoading}
-                required
+              required
                 sampleButtonSize="small"
-              />
-              <FileUploadBox
+            />
+            <FileUploadBox
                 title="QC Fail"
                 onFileUpload={handleQcFailUpload}
                 onClear={() => clearData('qcFail')}
                 data={data.qcFail}
                 loading={fileLoading}
-                required={false}
+              required={false}
                 sampleButtonSize="small"
-              />
-            </div>
+            />
+          </div>
           </section>
 
           {/* File Upload Guidelines section (alt background, extra spacing) */}
@@ -312,26 +312,26 @@ const GRNGenerator = () => {
             <p className="text-sm text-gray-600 mt-2 mb-6">
               Please verify and complete the following information. Fields marked with <span className="text-blue-500">*</span> are required.
             </p>
-            <HeaderForm
-              key={testMode ? 'test' : 'prod'}
-              grnHeaderInfo={grnHeaderInfo}
-              onHeaderChange={handleHeaderChange}
-              previousValues={previousValues}
-              setPreviousValues={setPreviousValues}
-              testMode={testMode}
-            />
+          <HeaderForm
+            key={testMode ? 'test' : 'prod'}
+            grnHeaderInfo={grnHeaderInfo}
+            onHeaderChange={handleHeaderChange}
+            previousValues={previousValues}
+            setPreviousValues={setPreviousValues}
+            testMode={testMode}
+          />
           </section>
 
           {/* Generate Button */}
           <div className="flex justify-center mb-14 mt-8">
-            <button
+          <button
               className="btn"
-              onClick={handleGenerateGRN}
+            onClick={handleGenerateGRN}
               disabled={fileLoading || grnLoading || !data.putAway.length || (!acknowledgeOnly && !data.purchaseOrder.length)}
-            >
+          >
               {grnLoading ? "Generating GRN..." : "Generate GRN"}
-            </button>
-          </div>
+          </button>
+        </div>
 
           {/* Error Display */}
           {(fileErrors.length > 0 || grnErrors.length > 0) && (
@@ -380,28 +380,28 @@ const GRNGenerator = () => {
               >
                 Clear All
               </button>
-            </div>
-          )}
+          </div>
+        )}
 
           {/* GRN Display Table (alt background, extra spacing) */}
-          {grnData.length > 0 && (
+        {grnData.length > 0 && (
             <section className="section-alt px-8 pb-10 mt-14 mb-8">
               <h2 className="text-2xl font-bold mb-6">GRN Table</h2>
-              <GRNTable
-                data={grnData}
-                filteredData={filteredData}
-                getStatusColor={getStatusColor}
-                grnHeaderInfo={grnHeaderInfo}
-                activeFilters={activeFilters}
-                search={search}
-                onFilterChange={handleFilterChange}
-                onSearchChange={setSearch}
-                onClearFilters={handleClearFilters}
-                onDownloadFiltered={handleDownloadFilteredCSV}
-              />
+            <GRNTable
+              data={grnData}
+              filteredData={filteredData}
+              getStatusColor={getStatusColor}
+              grnHeaderInfo={grnHeaderInfo}
+              activeFilters={activeFilters}
+              search={search}
+              onFilterChange={handleFilterChange}
+              onSearchChange={setSearch}
+              onClearFilters={handleClearFilters}
+              onDownloadFiltered={handleDownloadFilteredCSV}
+            />
             </section>
           )}
-        </div>
+          </div>
       </div>
 
       {/* Data Preview Modal */}
@@ -416,6 +416,7 @@ const GRNGenerator = () => {
           rawData={previewModal.rawData}
           skuCodeType={skuCodeType}
           setSkuCodeType={setSkuCodeType}
+          noPO={acknowledgeOnly || !data.purchaseOrder.length}
         />
       )}
     </div>

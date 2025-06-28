@@ -71,19 +71,19 @@ export const FileUploadBox = ({ title, onFileUpload, onClear, data = [], loading
               {loading ? "Processing..." : "Click to upload CSV/Excel file"}
             </p>
             {showSampleButton && (
-              <button
-                onClick={handleDownloadSample}
+            <button
+              onClick={handleDownloadSample}
                 className={sampleButtonSize === 'small'
                   ? 'mt-3 inline-flex items-center justify-center px-3 py-1.5 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition-colors duration-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-300'
                   : 'mt-3 inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-full shadow hover:bg-blue-700 transition-colors duration-200 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-blue-300'}
-                disabled={loading}
+              disabled={loading}
                 type="button"
-              >
+            >
                 <svg className={sampleButtonSize === 'small' ? 'w-4 h-4 mr-1' : 'w-5 h-5 mr-2'} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                 </svg>
-                Download Sample File
-              </button>
+              Download Sample File
+            </button>
             )}
           </div>
         )}

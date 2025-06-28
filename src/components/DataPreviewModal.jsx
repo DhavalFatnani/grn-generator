@@ -10,7 +10,8 @@ export const DataPreviewModal = ({
   sampleData,
   skuCodeType,
   setSkuCodeType,
-  rawData
+  rawData,
+  noPO
 }) => {
   const [selectedHeaderRow, setSelectedHeaderRow] = useState(0);
   const [customHeaders, setCustomHeaders] = useState([]);
@@ -37,6 +38,12 @@ export const DataPreviewModal = ({
   // Cell selection mode
   const [selectionMode, setSelectionMode] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
+
+  // SKU code type selection for no PO
+  const [localSkuCodeType, setLocalSkuCodeType] = useState(skuCodeType || 'BRAND');
+  useEffect(() => {
+    if (isOpen && skuCodeType) setLocalSkuCodeType(skuCodeType);
+  }, [isOpen, skuCodeType]);
 
   // Debug logging when modal opens
   useEffect(() => {
@@ -190,13 +197,14 @@ export const DataPreviewModal = ({
   };
 
   const handleConfirm = () => {
+    if (setSkuCodeType) setSkuCodeType(localSkuCodeType);
     console.log('handleConfirm called', {
       customHeadersLength: customHeaders.length,
       selectedHeaderRow,
       processedDataLength: processedData?.length,
       columnMapping,
       grnHeaderSelections,
-      skuCodeType
+      skuCodeType: localSkuCodeType
     });
 
     // Check if we have processed data and headers
@@ -209,7 +217,7 @@ export const DataPreviewModal = ({
           dataLength: processedData.length,
           grnHeaderInfo: grnHeaderSelections,
           columnMapping: columnMapping,
-          skuCodeType: skuCodeType
+          skuCodeType: localSkuCodeType
         });
 
         onConfirm({
@@ -217,7 +225,7 @@ export const DataPreviewModal = ({
           data: processedData,
           grnHeaderInfo: grnHeaderSelections,
           columnMapping: columnMapping,
-          skuCodeType: skuCodeType
+          skuCodeType: localSkuCodeType
         });
       } else {
         console.error('No valid header info found');
@@ -399,8 +407,8 @@ export const DataPreviewModal = ({
                   <input
                     type="radio"
                     value="KNOT"
-                    checked={skuCodeType === "KNOT"}
-                    onChange={(e) => setSkuCodeType(e.target.value)}
+                    checked={localSkuCodeType === "KNOT"}
+                    onChange={(e) => setLocalSkuCodeType(e.target.value)}
                     className="mr-3"
                   />
                   <span className="text-sm">
@@ -411,8 +419,8 @@ export const DataPreviewModal = ({
                   <input
                     type="radio"
                     value="Brand"
-                    checked={skuCodeType === "Brand"}
-                    onChange={(e) => setSkuCodeType(e.target.value)}
+                    checked={localSkuCodeType === "Brand"}
+                    onChange={(e) => setLocalSkuCodeType(e.target.value)}
                     className="mr-3"
                   />
                   <span className="text-sm">
@@ -420,6 +428,37 @@ export const DataPreviewModal = ({
                   </span>
                 </label>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* SKU Code Type Prompt for Put Away with no PO */}
+        {(fileType === 'putAway' || fileType === 'Put Away') && noPO && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+            <label className="block font-medium mb-2 text-blue-900">Is the SKU column in your file a KNOT code or a Brand code?</label>
+            <div className="flex gap-6">
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  name="skuCodeType"
+                  value="KNOT"
+                  checked={localSkuCodeType === 'KNOT'}
+                  onChange={() => setLocalSkuCodeType('KNOT')}
+                  className="form-radio text-blue-600"
+                />
+                <span className="ml-2">KNOT Code</span>
+              </label>
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  name="skuCodeType"
+                  value="BRAND"
+                  checked={localSkuCodeType === 'BRAND'}
+                  onChange={() => setLocalSkuCodeType('BRAND')}
+                  className="form-radio text-blue-600"
+                />
+                <span className="ml-2">Brand Code</span>
+              </label>
             </div>
           </div>
         )}

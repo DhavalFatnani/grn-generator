@@ -24,6 +24,7 @@ export const useFileUpload = () => {
     detectedHeaders: null,
     onConfirm: null
   });
+  const [skuCodeType, setSkuCodeType] = useState('BRAND');
 
   // Debug effect to monitor putAwayData changes
   useEffect(() => {
@@ -96,7 +97,11 @@ export const useFileUpload = () => {
         }
       } else if (fileType === 'putAway') {
         const lowerCaseRow = row?.map(cell => cell?.toString().toLowerCase().trim());
-        if (lowerCaseRow && lowerCaseRow.includes('sku') && lowerCaseRow.includes('bin')) {
+        if (
+          lowerCaseRow &&
+          lowerCaseRow.includes('sku') &&
+          (lowerCaseRow.includes('bin') || lowerCaseRow.includes('bin location'))
+        ) {
           console.log(`findHeaderRow: Found putAway header row at index ${i}`);
           return i;
         }
@@ -204,8 +209,11 @@ export const useFileUpload = () => {
               rowIndex: findHeaderRow(results.data, fileType),
               headers: processed.headers
             },
+            skuCodeType,
+            setSkuCodeType,
+            noPO: fileType === 'putAway' && (!data.purchaseOrder || data.purchaseOrder.length === 0),
             onConfirm: (selectedData) => {
-              console.log('Modal confirmed with data:', selectedData);
+              if (selectedData && selectedData.skuCodeType) setSkuCodeType(selectedData.skuCodeType);
               processFileData(selectedData, fileType);
               setPreviewModal(prev => ({ ...prev, isOpen: false }));
             }
@@ -224,7 +232,7 @@ export const useFileUpload = () => {
         setLoading(false);
       },
     });
-  }, []);
+  }, [data.purchaseOrder, skuCodeType]);
 
   const processFileData = (selectedData, fileType) => {
     console.log(`Processing file data for ${fileType}:`, selectedData);
