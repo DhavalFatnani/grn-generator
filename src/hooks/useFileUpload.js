@@ -78,83 +78,63 @@ export const useFileUpload = () => {
   };
 
   const findHeaderRow = (data, fileType) => {
-    console.log('findHeaderRow: Searching for header row in data:', data);
-    console.log('findHeaderRow: Data length:', data.length);
-    
+    // Robustly find the header row for each file type
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      console.log(`findHeaderRow: Checking row ${i}:`, row);
-      
+      if (!row) continue;
       if (fileType === 'purchaseOrder') {
-        if (row?.some(cell => {
-          const cellStr = cell?.toString().toLowerCase();
-          const hasSno = cellStr.includes("sno");
-          console.log(`findHeaderRow: Cell "${cell}" -> "${cellStr}" -> hasSno: ${hasSno}`);
-          return hasSno;
-        })) {
-          console.log(`findHeaderRow: Found purchaseOrder header row at index ${i}`);
+        // Look for both 'Sno' and 'Brand SKU Code' in the row
+        const lowerRow = row.map(cell => (cell || '').toString().toLowerCase().trim());
+        if (lowerRow.includes('sno') && lowerRow.includes('brand sku code')) {
           return i;
         }
       } else if (fileType === 'putAway') {
-        const lowerCaseRow = row?.map(cell => cell?.toString().toLowerCase().trim());
+        const lowerRow = row.map(cell => (cell || '').toString().toLowerCase().trim());
         if (
-          lowerCaseRow &&
-          lowerCaseRow.includes('sku') &&
-          (lowerCaseRow.includes('bin') || lowerCaseRow.includes('bin location'))
+          lowerRow.includes('sku') &&
+          (lowerRow.includes('bin') || lowerRow.includes('bin location'))
         ) {
-          console.log(`findHeaderRow: Found putAway header row at index ${i}`);
           return i;
         }
       } else if (fileType === 'qcFail') {
-        if (row?.some(cell => {
-          const cellStr = cell?.toString().toLowerCase();
-          const isQcFailHeader = cellStr === 'sku' && row.length >= 2 && row[1]?.toString().toLowerCase().includes('remark');
-          console.log(`findHeaderRow: Cell "${cell}" -> "${cellStr}" -> isQcFailHeader: ${isQcFailHeader}`);
-          return isQcFailHeader;
-        })) {
-          console.log(`findHeaderRow: Found qcFail header row at index ${i}`);
+        const lowerRow = row.map(cell => (cell || '').toString().toLowerCase().trim());
+        if (lowerRow.includes('sku') && lowerRow.includes('remark')) {
           return i;
         }
       }
     }
-    
-    console.log(`findHeaderRow: No header row found for fileType: ${fileType}`);
+    // If not found, return -1
     return -1;
   };
 
   const processCSVData = (results, fileType) => {
     const { poNumber, brandName } = extractHeaderInfo(results, fileType);
-    
     if (fileType === 'purchaseOrder') {
       setGrnHeaderInfo(prev => ({ ...prev, poNumber, brandName }));
     }
-
     const headerRowIndex = findHeaderRow(results.data, fileType);
     if (headerRowIndex === -1) {
-      throw new Error("Could not find header row");
+      throw new Error(`Could not find header row for ${fileType}. Please ensure the file contains the correct headers (e.g., 'Sno', 'Brand SKU Code').`);
     }
-
-    const headers = results.data[headerRowIndex].map(h => (h || "").toString().trim());
+    const headers = results.data[headerRowIndex].map(h => (h || '').toString().trim());
     const detectedColumns = detectColumns(headers, fileType);
-    
     const processedData = results.data
       .slice(headerRowIndex + 1)
-      .filter(row => row?.some(cell => cell?.toString().trim() !== ""))
+      .filter(row => row?.some(cell => cell?.toString().trim() !== ''))
       .map(row => {
         const obj = {};
         headers.forEach((header, index) => {
-          obj[header] = row[index]?.toString().trim() || "";
+          obj[header] = row[index]?.toString().trim() || '';
         });
         return obj;
       })
       .filter(obj => {
         if (fileType === 'purchaseOrder') {
-          return obj["Sno"] && obj["Sno"] !== "";
+          return obj['Sno'] && obj['Sno'] !== '';
         }
         // For putAway and qcFail, allow all rows after header
-        return Object.values(obj).some(val => val && val !== "");
+        return Object.values(obj).some(val => val && val !== '');
       });
-
     return {
       headers,
       data: processedData,

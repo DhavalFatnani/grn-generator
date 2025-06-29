@@ -12,6 +12,31 @@ import { DEFAULT_VALUES, INITIAL_GRN_HEADER, TEST_DATA_TEMPLATES } from "./utils
 
 const THEME_KEY = 'grnTheme';
 
+// Theme Context
+const ThemeContext = React.createContext();
+
+export const ThemeProvider = ({ children }) => {
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
+
+  const toggleTheme = () => setIsDark(!isDark);
+
+  return (
+    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+const useTheme = () => React.useContext(ThemeContext);
+
 const GRNGenerator = () => {
   // File upload state and handlers
   const {
@@ -61,14 +86,15 @@ const GRNGenerator = () => {
     return localStorage.getItem('grnTestMode') === 'true';
   });
 
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
+  const { isDark, toggleTheme } = useTheme();
 
   const [acknowledgeOnly, setAcknowledgeOnly] = useState(false);
 
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
   useEffect(() => {
-    document.body.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
 
   // Keyboard shortcut: Ctrl+Shift+T (or Cmd+Shift+T)
   useEffect(() => {
@@ -120,13 +146,22 @@ const GRNGenerator = () => {
   }, []);
 
   // Download handlers
+  const getFilterSummaryForFilename = (filters, search) => {
+    let parts = [];
+    if (search) parts.push(`search-${search}`);
+    if (filters.status && filters.status.length > 0) parts.push(`status-${filters.status.join("_")}`);
+    if (filters.qcStatus && filters.qcStatus.length > 0) parts.push(`qc-${filters.qcStatus.join("_")}`);
+    if (filters.issueType && filters.issueType.length > 0) parts.push(`issue-${filters.issueType.join("_")}`);
+    return parts.length > 0 ? parts.join("_") : null;
+  };
+
   const handleDownloadCSV = useCallback(() => {
     if (!grnData?.length || !grnHeaderInfo?.brandName || !grnHeaderInfo?.replenishmentNumber) {
       console.error('Missing required data for CSV download');
       return;
     }
     const mergedHeaderInfo = { ...INITIAL_GRN_HEADER, ...grnHeaderInfo };
-    downloadCSV(grnData, mergedHeaderInfo);
+    downloadCSV(grnData, mergedHeaderInfo, { filterSummary: null });
   }, [grnData, grnHeaderInfo]);
 
   const handleDownloadFilteredCSV = useCallback(() => {
@@ -136,20 +171,23 @@ const GRNGenerator = () => {
       return;
     }
     const mergedHeaderInfo = { ...INITIAL_GRN_HEADER, ...grnHeaderInfo };
-    downloadCSV(filteredData, mergedHeaderInfo, { isFilteredExport: true });
+    const filterSummary = getFilterSummaryForFilename(activeFilters, search);
+    downloadCSV(filteredData, mergedHeaderInfo, { isFilteredExport: true, filterSummary });
   }, [grnData, activeFilters, search, grnHeaderInfo]);
 
   const handleDownloadGRN = useCallback(() => {
-    downloadHTML(grnData, grnHeaderInfo);
-  }, [grnData, grnHeaderInfo]);
+    const filterSummary = getFilterSummaryForFilename(activeFilters, search);
+    downloadHTML(grnData, grnHeaderInfo, { filterSummary });
+  }, [grnData, grnHeaderInfo, activeFilters, search]);
 
   const handleDownloadPDF = useCallback(() => {
     if (!grnData?.length || !grnHeaderInfo?.brandName || !grnHeaderInfo?.replenishmentNumber) {
       console.error('Missing required data for PDF download');
       return;
     }
-    downloadPDF(grnData, grnHeaderInfo);
-  }, [grnData, grnHeaderInfo]);
+    const filterSummary = getFilterSummaryForFilename(activeFilters, search);
+    downloadPDF(grnData, grnHeaderInfo, { filterSummary });
+  }, [grnData, grnHeaderInfo, activeFilters, search]);
 
   // Filtering Logic
   const getFilteredData = useCallback(() => {
@@ -192,8 +230,14 @@ const GRNGenerator = () => {
 
   const filteredData = getFilteredData();
 
+  useEffect(() => {
+    console.log('activeFilters:', activeFilters);
+    console.log('filteredData:', filteredData);
+  }, [activeFilters, filteredData]);
+
   // Filter Handlers
   const handleFilterChange = useCallback((filterType, value) => {
+    console.log('handleFilterChange', filterType, value);
     setActiveFilters(prev => ({
       ...prev,
       [filterType]: prev[filterType].includes(value)
@@ -230,15 +274,60 @@ const GRNGenerator = () => {
     });
   }, [clearAllData]);
 
+  // Close export menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showExportMenu && !event.target.closest('.sticky-export-bar')) {
+        setShowExportMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showExportMenu]);
+
   return (
     <div className="min-h-screen">
-      {/* Modern Professional Sticky Header */}
-      <header className="sticky-header">
-        <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="KNOT Logo" style={{ height: 32, width: 32, borderRadius: 8 }} />
-          <span className="logo">GRN Generator</span>
+      {/* Integrated App Header */}
+      <header className=" dark:from-gray-900 dark:via-gray-800 dark:to-gray-800 dark:border-gray-700/50 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-between">
+            {/* Logo and Title */}
+            <div className="flex items-center justify-center gap-4">
+              {/* Logo with subtle background */}
+              <div className="flex items-center justify-center w-10 h-10 bg-blue-500/10 rounded-lg dark:bg-blue-400/20 transition-colors duration-200">
+                <img src="/logo.png" alt="KNOT Logo" className="w-6 h-6" />
+              </div>
+              
+              {/* Title with better typography */}
+              <div className="text-center">
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent dark:from-blue-400 dark:to-indigo-400 mt-3 transition-colors duration-200">
+                  GRN Generator
+                </h1>
+              </div>
+            </div>
+
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-all duration-200 shadow-sm"
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDark ? (
+                <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
-        <div className="text-sm text-gray-500 font-medium">Professional Inventory Management</div>
+        
+        {/* Subtle decorative element that flows into content */}
+        <div className="h-1 bg-gradient-to-r from-transparent via-blue-200/30 to-transparent dark:via-gray-600/30 transition-colors duration-200"></div>
       </header>
       {/* Test Mode Banner */}
       {testMode && (
@@ -345,43 +434,71 @@ const GRNGenerator = () => {
             </section>
           )}
 
-          {/* Modern Sticky Export Bar - floating and visually distinct */}
+          {/* Modern Sticky Export Bar */}
           {grnData.length > 0 && (
-            <div className="sticky-export-bar animate-fade-in" style={{ zIndex: 300 }}>
+            <div className="sticky-export-bar">
+              <div className={`fab-menu ${showExportMenu ? 'show' : ''}`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadCSV();
+                    setShowExportMenu(false);
+                  }}
+                  className="fab-menu-item"
+                  aria-label="Download CSV"
+                >
+                  <span className="icon">📊</span>
+                  Download CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadGRN();
+                    setShowExportMenu(false);
+                  }}
+                  className="fab-menu-item"
+                  aria-label="Download GRN (HTML)"
+                >
+                  <span className="icon">🌐</span>
+                  Download GRN (HTML)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadPDF();
+                    setShowExportMenu(false);
+                  }}
+                  className="fab-menu-item"
+                  aria-label="Download PDF"
+                >
+                  <span className="icon">📄</span>
+                  Download PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGrnData([]);
+                    setGrnHeaderInfo({});
+                    setShowExportMenu(false);
+                  }}
+                  className="fab-menu-item danger"
+                  aria-label="Clear All"
+                >
+                  <span className="icon">✖</span>
+                  Clear All
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={handleDownloadCSV}
-                className="btn"
-                aria-label="Download CSV"
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="fab-main"
+                aria-label="Export Options"
+                aria-expanded={showExportMenu}
               >
-                Download CSV
+                ⬇
               </button>
-              <button
-                type="button"
-                onClick={handleDownloadGRN}
-                className="btn secondary"
-                aria-label="Download GRN (HTML)"
-              >
-                Download GRN (HTML)
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadPDF}
-                className="btn secondary"
-                aria-label="Download PDF"
-              >
-                Download PDF
-              </button>
-              <button
-                type="button"
-                onClick={handleClearAll}
-                className="btn secondary"
-                aria-label="Clear All"
-              >
-                Clear All
-              </button>
-          </div>
-        )}
+            </div>
+          )}
 
           {/* GRN Display Table (alt background, extra spacing) */}
         {grnData.length > 0 && (
@@ -423,4 +540,13 @@ const GRNGenerator = () => {
   );
 };
 
-export default GRNGenerator; 
+// Main App wrapper with theme provider
+const App = () => {
+  return (
+    <ThemeProvider>
+      <GRNGenerator />
+    </ThemeProvider>
+  );
+};
+
+export default App; 

@@ -327,15 +327,19 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
                 {Array.isArray(grnHeaderInfo.qcDoneBy) && grnHeaderInfo.qcDoneBy.map((person) => (
                   <span
                     key={person}
-                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 shadow-sm gap-1 mr-1 mb-1 transition-all duration-150"
+                    style={{ lineHeight: 1.1 }}
                   >
                     {person}
                     <button
                       type="button"
                       onClick={() => handleRemoveTag(person)}
-                      className="ml-1.5 -mr-0.5 h-4 w-4 rounded-full inline-flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
+                      aria-label={`Remove ${person}`}
+                      tabIndex={0}
+                      style={{ lineHeight: 1, fontSize: '14px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
-                      ×
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>×</span>
                     </button>
                   </span>
                 ))}

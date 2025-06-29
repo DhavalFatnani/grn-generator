@@ -124,27 +124,43 @@ export const useGRNGenerator = () => {
         qcFailPivot[sku] += qty;
       });
 
-      // 3. Pivot PO by SKU (for lookup)
+      // 3. Pivot PO by SKU (for lookup) - Use user-selected skuCodeType
       const poPivot = {};
+      const poPivotByKnot = {};
       if (purchaseOrderData && purchaseOrderData.length > 0) {
         purchaseOrderData.forEach(row => {
-          const sku = (row["Brand SKU Code"] || row["KNOT SKU Code"] || row["SKU"] || row["SKU ID"] || "").toString().trim().toUpperCase();
-          if (!sku) return;
-          if (!poPivot[sku]) poPivot[sku] = { ...row, __qty: 0 };
-          poPivot[sku].__qty += parseQuantity(row["Quantity"]);
+          const brandSku = (row["Brand SKU Code"] || "").toString().trim().toUpperCase();
+          const knotSku = (row["KNOT SKU Code"] || "").toString().trim().toUpperCase();
+          
+          if (brandSku) {
+            if (!poPivot[brandSku]) poPivot[brandSku] = { ...row, __qty: 0 };
+            poPivot[brandSku].__qty += parseQuantity(row["Quantity"]);
+          }
+          
+          if (knotSku) {
+            if (!poPivotByKnot[knotSku]) poPivotByKnot[knotSku] = { ...row, __qty: 0 };
+            poPivotByKnot[knotSku].__qty += parseQuantity(row["Quantity"]);
+          }
         });
       }
 
-      // 4. Union of all SKUs
+      // 4. Union of all SKUs - use appropriate PO pivot based on user selection
       const allSkus = new Set([
-        ...Object.keys(poPivot),
         ...Object.keys(putawayPivot),
         ...Object.keys(qcFailPivot)
       ]);
+      
+      // Add PO SKUs based on user's skuCodeType selection
+      if (skuCodeType === 'KNOT') {
+        Object.keys(poPivotByKnot).forEach(sku => allSkus.add(sku));
+      } else {
+        Object.keys(poPivot).forEach(sku => allSkus.add(sku));
+      }
 
       // 5. Build GRN rows
       const finalGrnData = Array.from(allSkus).map(sku => {
-        const poRow = poPivot[sku];
+        // Determine which PO pivot to use based on user selection
+        const poRow = skuCodeType === 'KNOT' ? poPivotByKnot[sku] : poPivot[sku];
         const orderedQty = poRow ? poRow.__qty : 0;
         const receivedQty = (putawayPivot[sku] || 0) + (qcFailPivot[sku] || 0);
         const failedQCQty = qcFailPivot[sku] || 0;
@@ -186,6 +202,7 @@ export const useGRNGenerator = () => {
         if (failedQCQty > 0) remarks += `QC Failed: ${failedQCQty} units. `;
         if (notOrderedQty > 0) remarks += `Not Ordered: ${notOrderedQty} units. `;
         if (receivedQty === 0) remarks += "Not Received. ";
+        if (status === "Received") remarks += "All items received as per order. ";
         remarks = remarks.trim();
 
         // Use PO row for meta fields if available, else fallback to putAway/QCFail data
@@ -202,14 +219,16 @@ export const useGRNGenerator = () => {
         // Brand SKU Code and KNOT SKU Code fallback logic
         let brandSkuCode, knotSkuCode;
         if (poRow) {
-          brandSkuCode = poRow["Brand SKU Code"] || sku;
+          brandSkuCode = poRow["Brand SKU Code"] || "";
           knotSkuCode = poRow["KNOT SKU Code"] || "";
         } else {
           if (skuCodeType === 'KNOT') {
-            knotSkuCode = bestRow["SKU"] || bestRow["SKU ID"] || bestRow["KNOT SKU Code"] || bestRow["Brand SKU Code"] || sku;
+            // If user selected KNOT code comparison, use the SKU as KNOT SKU
+            knotSkuCode = sku;
             brandSkuCode = '';
           } else {
-            brandSkuCode = bestRow["SKU"] || bestRow["SKU ID"] || bestRow["Brand SKU Code"] || bestRow["KNOT SKU Code"] || sku;
+            // If user selected Brand code comparison, use the SKU as Brand SKU
+            brandSkuCode = sku;
             knotSkuCode = '';
           }
         }
@@ -290,10 +309,10 @@ export const useGRNGenerator = () => {
           };
         }
         // Only add Ordered/Shortage/Excess if PO exists
-        if (poRow && orderedQty > 0) {
+        if (poRow) {
           row["Ordered Qty"] = orderedQty;
-          row["Shortage Qty"] = shortageQty;
-          row["Excess Qty"] = excessQty;
+          row["Shortage Qty"] = shortageQty || 0;
+          row["Excess Qty"] = excessQty || 0;
         }
         return row;
       });

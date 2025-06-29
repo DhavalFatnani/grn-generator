@@ -197,14 +197,14 @@ export const DataPreviewModal = ({
   };
 
   const handleConfirm = () => {
-    if (setSkuCodeType) setSkuCodeType(localSkuCodeType);
+    if (setSkuCodeType) setSkuCodeType(localSkuCodeType.toUpperCase());
     console.log('handleConfirm called', {
       customHeadersLength: customHeaders.length,
       selectedHeaderRow,
       processedDataLength: processedData?.length,
       columnMapping,
       grnHeaderSelections,
-      skuCodeType: localSkuCodeType
+      skuCodeType: localSkuCodeType.toUpperCase()
     });
 
     // Check if we have processed data and headers
@@ -217,7 +217,7 @@ export const DataPreviewModal = ({
           dataLength: processedData.length,
           grnHeaderInfo: grnHeaderSelections,
           columnMapping: columnMapping,
-          skuCodeType: localSkuCodeType
+          skuCodeType: localSkuCodeType.toUpperCase()
         });
 
         onConfirm({
@@ -225,7 +225,7 @@ export const DataPreviewModal = ({
           data: processedData,
           grnHeaderInfo: grnHeaderSelections,
           columnMapping: columnMapping,
-          skuCodeType: localSkuCodeType
+          skuCodeType: localSkuCodeType.toUpperCase()
         });
       } else {
         console.error('No valid header info found');
@@ -408,7 +408,7 @@ export const DataPreviewModal = ({
                     type="radio"
                     value="KNOT"
                     checked={localSkuCodeType === "KNOT"}
-                    onChange={(e) => setLocalSkuCodeType(e.target.value)}
+                    onChange={(e) => setLocalSkuCodeType("KNOT")}
                     className="mr-3"
                   />
                   <span className="text-sm">
@@ -418,9 +418,9 @@ export const DataPreviewModal = ({
                 <label className="flex items-center">
                   <input
                     type="radio"
-                    value="Brand"
-                    checked={localSkuCodeType === "Brand"}
-                    onChange={(e) => setLocalSkuCodeType(e.target.value)}
+                    value="BRAND"
+                    checked={localSkuCodeType === "BRAND"}
+                    onChange={(e) => setLocalSkuCodeType("BRAND")}
                     className="mr-3"
                   />
                   <span className="text-sm">

@@ -5,9 +5,9 @@ import DropdownFilter from './DropdownFilter';
 const SummaryCard = ({ icon, label, value, color, highlight }) => (
   <div className={`flex flex-col items-center justify-center rounded-xl px-6 py-4 shadow-sm ${color} ${highlight ? 'ring-2 ring-red-200' : ''}`}
     style={{ minWidth: 120 }}>
-    <div className="text-2xl mb-1">{icon}</div>
-    <div className="text-2xl font-bold" style={{ lineHeight: 1 }}>{value}</div>
-    <div className="text-xs text-gray-700 mt-1 text-center whitespace-nowrap">{label}</div>
+    <div className="flex items-center justify-center text-2xl mb-1">{icon}</div>
+    <div className="text-2xl font-bold flex items-center justify-center" style={{ lineHeight: 1 }}>{value}</div>
+    <div className="text-xs text-gray-700 mt-1 text-center whitespace-nowrap flex items-center justify-center">{label}</div>
   </div>
 );
 
@@ -27,6 +27,14 @@ export const GRNTable = ({
   const [tooltip, setTooltip] = useState({ show: false, content: '', x: 0, y: 0 });
   const tableRef = useRef(null);
   const [expandedRow, setExpandedRow] = useState(null);
+  // --- Sorting State ---
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
+  // Local filter state for dropdowns
+  const statusOptions = ["Shortage", "Excess", "Not Received", "Excess Receipt", "Received"];
+  const qcStatusOptions = ["Passed", "Failed", "Partial"];
+  const issueTypeOptions = ["qcOnly", "qtyOnly", "bothIssues"];
+  const issueTypeLabels = { qcOnly: "QC Only", qtyOnly: "Quantity Only", bothIssues: "Both Issues" };
 
   const handleMouseEnter = (e, content) => {
     const targetRect = e.currentTarget.getBoundingClientRect();
@@ -144,13 +152,13 @@ export const GRNTable = ({
     ) : null;
   };
 
-  const isFiltered = search || Object.values(activeFilters).some(Boolean);
+  const isFiltered = search || Object.values(activeFilters).some(arr => Array.isArray(arr) && arr.length > 0);
   const filterSummary = isFiltered ? (
     <div className="mb-2 px-4 py-2 rounded bg-blue-50 border border-blue-100 text-blue-800 text-sm font-medium sticky top-0 z-20 shadow-sm">
       Showing {filteredData.length} of {data.length} items
       {search && <span> (search: <span className="font-semibold">{search}</span>)</span>}
-      {Object.entries(activeFilters).filter(([k, v]) => v).length > 0 && (
-        <span> (filtered by: {Object.entries(activeFilters).filter(([k, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')})</span>
+      {Object.entries(activeFilters).filter(([k, v]) => Array.isArray(v) && v.length > 0).length > 0 && (
+        <span> (filtered by: {Object.entries(activeFilters).filter(([k, v]) => Array.isArray(v) && v.length > 0).map(([k, v]) => `${k}: ${v}`).join(', ')})</span>
       )}
     </div>
   ) : null;
@@ -174,6 +182,44 @@ export const GRNTable = ({
     skuDataHeader = allHaveKnot ? 'Knot Code' : 'Brand Code';
   }
 
+  // --- Sorting Logic ---
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        // Toggle direction
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const getSortIndicator = (key) => {
+    if (sortConfig.key !== key) return null;
+    return sortConfig.direction === 'asc' ? '▲' : '▼';
+  };
+
+  // Sort the filteredData for display
+  const sortedData = React.useMemo(() => {
+    if (!sortConfig.key) return filteredData;
+    const sorted = [...filteredData].sort((a, b) => {
+      const aVal = a[sortConfig.key];
+      const bVal = b[sortConfig.key];
+      // Numeric sort if both are numbers
+      if (!isNaN(parseFloat(aVal)) && !isNaN(parseFloat(bVal))) {
+        return sortConfig.direction === 'asc'
+          ? parseFloat(aVal) - parseFloat(bVal)
+          : parseFloat(bVal) - parseFloat(aVal);
+      }
+      // String sort
+      if (aVal === undefined || aVal === null) return 1;
+      if (bVal === undefined || bVal === null) return -1;
+      return sortConfig.direction === 'asc'
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal));
+    });
+    return sorted;
+  }, [filteredData, sortConfig]);
+
   return (
     <div ref={tableRef} className="space-y-6 relative">
       {/* Summary Cards */}
@@ -189,81 +235,93 @@ export const GRNTable = ({
             </>
           )}
           <SummaryCard icon="⚠️" label="With Issues" value={withIssues} color="bg-purple-50" highlight={withIssues > 0} />
-          </div>
+        </div>
       )}
-      {/* Modern Filter Bar */}
-      <div className="sticky top-0 z-30 bg-white shadow-md border-b border-gray-200 mb-4 px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-4 rounded-lg">
+      {/* Modern Filter Bar - rewritten */}
+      <div className="relative bg-white shadow-sm rounded-lg px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         {/* Search Box */}
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <span className="text-gray-400"><svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <div className="flex items-center gap-2 w-full md:w-auto z-10">
+          <span className="text-gray-400 flex items-center justify-center h-6 w-6"><svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
           <input
             type="text"
-            className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 w-full md:w-64"
+            className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 w-full md:w-48 transition-colors"
             placeholder="Search by SKU, Size, or Color..."
             value={search}
             onChange={e => onSearchChange(e.target.value)}
           />
-          {search && (
-            <button onClick={() => onSearchChange('')} className="text-gray-400 hover:text-gray-700 ml-1">×</button>
-          )}
         </div>
-        {/* Dropdowns */}
-        <div className="flex flex-wrap gap-3 w-full md:w-auto">
+        {/* Filters */}
+        <div className="flex flex-row gap-3 w-full md:w-auto items-end md:items-center justify-center">
           {/* Status Dropdown */}
-          <DropdownFilter
-            label="Status"
-            options={["Shortage", "Excess", "Not Received", "Excess Receipt", "Received"]}
-            selected={activeFilters.status}
-            onSelect={(value) => onFilterChange('status', value)}
-            countFn={val => data.filter(item => item.Status === val).length}
-          />
-          {/* QC Status Dropdown */}
-          {qcPerformed && (
+          <div className="flex flex-col items-start min-w-[100px]">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase mb-0.5 tracking-wider">Status</span>
             <DropdownFilter
-              label="QC Status"
-              options={['Passed', 'Failed', 'Partial']}
-              selected={activeFilters.qcStatus}
-              onSelect={(value) => onFilterChange('qcStatus', value)}
+              label={activeFilters.status.length > 0 ? activeFilters.status.join(', ') : 'All'}
+              options={statusOptions}
+              selected={activeFilters.status}
+              onSelect={val => onFilterChange('status', val)}
+              countFn={val => data.filter(item => item.Status === val).length}
             />
-          )}
-          {/* Issue Type Dropdown */}
-          <DropdownFilter
-            label="Issue Type"
-            options={["qcOnly", "qtyOnly", "bothIssues"]}
-            optionLabels={{ qcOnly: "QC Only", qtyOnly: "Quantity Only", bothIssues: "Both Issues" }}
-            selected={activeFilters.issueType}
-            onSelect={(value) => onFilterChange('issueType', value)}
-            countFn={val => {
-              const hasQCIssue = (item) => qcPerformed && item["QC Status"] !== "Passed" && item["QC Status"] !== "Not Performed";
-              const hasQtyIssue = (item) => ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status);
-
-              if (val === "qcOnly") return data.filter(item => hasQCIssue(item) && !hasQtyIssue(item)).length;
-              if (val === "qtyOnly") return data.filter(item => !hasQCIssue(item) && hasQtyIssue(item)).length;
-              if (val === "bothIssues") return data.filter(item => hasQCIssue(item) && hasQtyIssue(item)).length;
-              return 0;
-            }}
-          />
-        </div>
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 ml-auto">
-          {(search || activeFilters.status.length > 0 || activeFilters.qcStatus.length > 0 || activeFilters.issueType.length > 0) && (
-            <>
-              <button 
-                onClick={onDownloadFiltered}
-                className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium border border-blue-600 transition-colors"
-              >
-                Export View as CSV
-              </button>
-              <button 
-                onClick={onClearFilters} 
-                className="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm font-medium border border-gray-300 transition-colors"
-              >
-                Clear All
-              </button>
-            </>
-          )}
-        </div>
           </div>
+          {/* QC Status Dropdown */}
+          <div className="flex flex-col items-start min-w-[100px]">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase mb-0.5 tracking-wider">QC Status</span>
+            <DropdownFilter
+              label={activeFilters.qcStatus.length > 0 ? activeFilters.qcStatus.join(', ') : 'All'}
+              options={qcStatusOptions}
+              selected={activeFilters.qcStatus}
+              onSelect={val => onFilterChange('qcStatus', val)}
+              countFn={val => data.filter(item => item["QC Status"] === val).length}
+              disabled={!qcPerformed}
+            />
+          </div>
+          {/* Issue Type Dropdown */}
+          <div className="flex flex-col items-start min-w-[100px]">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase mb-0.5 tracking-wider">Issue Type</span>
+            <DropdownFilter
+              label={activeFilters.issueType.length > 0 ? activeFilters.issueType.map(val => issueTypeLabels[val] || val).join(', ') : 'All'}
+              options={issueTypeOptions}
+              optionLabels={issueTypeLabels}
+              selected={activeFilters.issueType}
+              onSelect={val => onFilterChange('issueType', val)}
+              countFn={val => {
+                const hasQCIssue = (item) => qcPerformed && item["QC Status"] !== "Passed" && item["QC Status"] !== "Not Performed";
+                const hasQtyIssue = (item) => ["Shortage", "Excess", "Not Received", "Excess Receipt", "Shortage & QC Failed", "Excess & QC Failed"].includes(item.Status);
+                if (val === "qcOnly") return data.filter(item => hasQCIssue(item) && !hasQtyIssue(item)).length;
+                if (val === "qtyOnly") return data.filter(item => !hasQCIssue(item) && hasQtyIssue(item)).length;
+                if (val === "bothIssues") return data.filter(item => hasQCIssue(item) && hasQtyIssue(item)).length;
+                return 0;
+              }}
+            />
+          </div>
+        </div>
+        {/* Export and Clear Actions */}
+        {(search || activeFilters.status.length > 0 || activeFilters.qcStatus.length > 0 || activeFilters.issueType.length > 0) && (
+          <div className="flex items-center gap-2 ml-auto z-10">
+            <button 
+              onClick={onDownloadFiltered}
+              className="px-3 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 transition-colors shadow-sm flex items-center gap-2"
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7,10 12,15 17,10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export as CSV
+            </button>
+            <button 
+              onClick={onClearFilters} 
+              className="px-3 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition-colors shadow-sm flex items-center gap-2"
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
       {/* Active Filter Chips */}
       {(search || activeFilters.status.length > 0 || activeFilters.qcStatus.length > 0 || activeFilters.issueType.length > 0) && (
         <div className="flex flex-wrap gap-2 mb-4 px-4">
@@ -274,21 +332,57 @@ export const GRNTable = ({
             </span>
           )}
           {activeFilters.status.map(val => (
-            <span key={val} className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-green-100 text-green-800 shadow-sm animate-fade-in">
-              Status: {val}
-              <button onClick={() => onFilterChange('status', val)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+            <span
+              key={val}
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 shadow-sm gap-1 mr-1 mb-1 transition-all duration-150"
+              style={{ lineHeight: 1.1 }}
+            >
+              {`Status: ${val}`}
+              <button
+                onClick={() => onFilterChange('status', val)}
+                className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
+                aria-label={`Remove ${val}`}
+                tabIndex={0}
+                style={{ lineHeight: 1, fontSize: '14px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>×</span>
+              </button>
             </span>
           ))}
           {activeFilters.qcStatus.map(val => (
-            <span key={val} className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 shadow-sm animate-fade-in">
-              QC: {val}
-              <button onClick={() => onFilterChange('qcStatus', val)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+            <span
+              key={val}
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 shadow-sm gap-1 mr-1 mb-1 transition-all duration-150"
+              style={{ lineHeight: 1.1 }}
+            >
+              {`QC: ${val}`}
+              <button
+                onClick={() => onFilterChange('qcStatus', val)}
+                className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
+                aria-label={`Remove ${val}`}
+                tabIndex={0}
+                style={{ lineHeight: 1, fontSize: '14px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>×</span>
+              </button>
             </span>
           ))}
           {activeFilters.issueType.map(val => (
-            <span key={val} className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-purple-100 text-purple-800 shadow-sm animate-fade-in">
-              Issue: {val === 'qcOnly' ? 'QC Only' : val === 'qtyOnly' ? 'Quantity Only' : 'Both Issues'}
-              <button onClick={() => onFilterChange('issueType', val)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+            <span
+              key={val}
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 shadow-sm gap-1 mr-1 mb-1 transition-all duration-150"
+              style={{ lineHeight: 1.1 }}
+            >
+              {`Issue: ${val === 'qcOnly' ? 'QC Only' : val === 'qtyOnly' ? 'Quantity Only' : 'Both Issues'}`}
+              <button
+                onClick={() => onFilterChange('issueType', val)}
+                className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
+                aria-label={`Remove ${val}`}
+                tabIndex={0}
+                style={{ lineHeight: 1, fontSize: '14px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>×</span>
+              </button>
             </span>
           ))}
         </div>
@@ -299,50 +393,92 @@ export const GRNTable = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50 sticky top-0 z-10 shadow">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S.No</th>
+              {/* 1. ITEM IDENTIFICATION */}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('S.No')}>
+                S.No {getSortIndicator('S.No')}
+              </th>
               {showSkuData && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{skuDataHeader}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('SKU Data')}>
+                  {skuDataHeader} {getSortIndicator('SKU Data')}
+                </th>
               )}
               {showBrandSKU && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brand SKU</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Brand SKU Code')}>
+                  Brand SKU {getSortIndicator('Brand SKU Code')}
+                </th>
               )}
               {showKnotSKU && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">KNOT SKU</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('KNOT SKU Code')}>
+                  KNOT SKU {getSortIndicator('KNOT SKU Code')}
+                </th>
               )}
               {showSize && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Size')}>
+                  Size {getSortIndicator('Size')}
+                </th>
               )}
               {showColors && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Colors</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Colors')}>
+                  Colors {getSortIndicator('Colors')}
+                </th>
               )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bin</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Bin')}>
+                Bin {getSortIndicator('Bin')}
+              </th>
+              
+              {/* 2. ORDER INFORMATION */}
               {showPOColumns && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ordered Qty</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Ordered Qty')}>
+                  Ordered Qty {getSortIndicator('Ordered Qty')}
+                </th>
               )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Received Qty</th>
+              
+              {/* 3. RECEIPT INFORMATION */}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Received Qty')}>
+                Received Qty {getSortIndicator('Received Qty')}
+              </th>
+              
+              {/* 4. QUALITY CONTROL */}
               {qcPerformed && (
                 <>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed QC Qty</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed QC Qty</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('QC Status')}>
+                    QC Status {getSortIndicator('QC Status')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Passed QC Qty')}>
+                    Passed QC Qty {getSortIndicator('Passed QC Qty')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Failed QC Qty')}>
+                    Failed QC Qty {getSortIndicator('Failed QC Qty')}
+                  </th>
                 </>
               )}
+              
+              {/* 5. ISSUES ANALYSIS */}
               {showPOColumns && (
                 <>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shortage Qty</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Excess Qty</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Shortage Qty')}>
+                    Shortage Qty {getSortIndicator('Shortage Qty')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Excess Qty')}>
+                    Excess Qty {getSortIndicator('Excess Qty')}
+                  </th>
                 </>
               )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              {qcPerformed && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QC Status</th>
-              )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
+              
+              {/* 6. FINAL STATUS AND REMARKS */}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Status')}>
+                Status {getSortIndicator('Status')}
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Remarks')}>
+                Remarks {getSortIndicator('Remarks')}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {filteredData.map((item, index) => (
+            {sortedData.map((item, index) => (
               <React.Fragment key={index}>
                 <tr className={getRowClass(item, index) + " hover:bg-blue-50 transition-colors duration-100"}>
+                  {/* 1. ITEM IDENTIFICATION */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["S.No"]}</td>
                   {showSkuData && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["SKU Data"]}</td>
@@ -379,22 +515,35 @@ export const GRNTable = ({
                       "-"
                     )}
                   </td>
+                  
+                  {/* 2. ORDER INFORMATION */}
                   {showPOColumns && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Ordered Qty"]}</td>
                   )}
+                  
+                  {/* 3. RECEIPT INFORMATION */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Received Qty"]}</td>
+                  
+                  {/* 4. QUALITY CONTROL */}
                   {qcPerformed && (
                     <>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getQCStatusColor(item["QC Status"])}`}>{item["QC Status"]}</span>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Passed QC Qty"]}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Failed QC Qty"]}</td>
                     </>
                   )}
+                  
+                  {/* 5. ISSUES ANALYSIS */}
                   {showPOColumns && (
                     <>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Shortage Qty"]}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Excess Qty"]}</td>
                     </>
                   )}
+                  
+                  {/* 6. FINAL STATUS AND REMARKS */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span 
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${customGetStatusColor ? customGetStatusColor(item.Status) : getStatusColor(item.Status)}`}
@@ -404,11 +553,6 @@ export const GRNTable = ({
                       {item.Status}
                     </span>
                   </td>
-                  {qcPerformed && (
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getQCStatusColor(item["QC Status"])}`}>{item["QC Status"]}</span>
-                    </td>
-                  )}
                   <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title={item["Remarks"]}>{item["Remarks"]}</td>
                 </tr>
                 {expandedRow === index && item["BinLocations"] && item["BinLocations"].length > 0 && (
