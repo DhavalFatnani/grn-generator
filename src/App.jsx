@@ -77,6 +77,7 @@ const GRNGenerator = () => {
     status: [],
     qcStatus: [],
     issueType: [],
+    qcFailReason: '',
   });
   const [search, setSearch] = useState('');
 
@@ -224,6 +225,9 @@ const GRNGenerator = () => {
           return false;
         }
       }
+      if (activeFilters.qcFailReason && !((item["QC Fail Reason"] || '').toLowerCase().includes(activeFilters.qcFailReason.toLowerCase()))) {
+        return false;
+      }
       return true;
     });
   }, [grnData, activeFilters, search, grnHeaderInfo.qcPerformed]);
@@ -247,7 +251,7 @@ const GRNGenerator = () => {
   }, []);
 
   const handleClearFilters = useCallback(() => {
-    setActiveFilters({ status: [], qcStatus: [], issueType: [] });
+    setActiveFilters({ status: [], qcStatus: [], issueType: [], qcFailReason: '' });
     setSearch('');
   }, []);
 
@@ -274,7 +278,7 @@ const GRNGenerator = () => {
     });
   }, [clearAllData]);
 
-  // Close export menu when clicking outside
+  // Close export menu when clicking Outsider 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (showExportMenu && !event.target.closest('.sticky-export-bar')) {

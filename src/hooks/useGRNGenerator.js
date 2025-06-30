@@ -116,12 +116,19 @@ export const useGRNGenerator = () => {
 
       // 2. Pivot QC Fail by SKU
       const qcFailPivot = {};
+      const qcFailRemarks = {};
       filteredQcFailData.forEach(row => {
         const sku = (row["SKU"] || row["SKU ID"] || row["Brand SKU Code"] || row["KNOT SKU Code"] || "").toString().trim().toUpperCase();
         if (!sku) return;
         if (!qcFailPivot[sku]) qcFailPivot[sku] = 0;
         const qty = parseQuantity(row["Quantity"] || row["Failed Quantity"] || 1);
         qcFailPivot[sku] += qty;
+        
+        // Capture QC fail remarks/reason
+        const remark = row["Remark"] || row["Remarks"] || row["Reason"] || row["QC Failed"] || row["Status"] || "";
+        if (remark && !qcFailRemarks[sku]) {
+          qcFailRemarks[sku] = remark;
+        }
       });
 
       // 3. Pivot PO by SKU (for lookup) - Use user-selected skuCodeType
@@ -156,6 +163,9 @@ export const useGRNGenerator = () => {
       } else {
         Object.keys(poPivot).forEach(sku => allSkus.add(sku));
       }
+
+      // After building putawayPivot, poPivot, and qcFailPivot, ensure all SKUs from qcFailPivot are in allSkus
+      Object.keys(qcFailPivot).forEach(sku => allSkus.add(sku));
 
       // 5. Build GRN rows
       const finalGrnData = Array.from(allSkus).map(sku => {
@@ -203,6 +213,10 @@ export const useGRNGenerator = () => {
         if (notOrderedQty > 0) remarks += `Not Ordered: ${notOrderedQty} units. `;
         if (receivedQty === 0) remarks += "Not Received. ";
         if (status === "Received") remarks += "All items received as per order. ";
+        
+        // Add QC fail remarks if available
+        const qcFailReason = qcFailRemarks[sku] || '';
+        
         remarks = remarks.trim();
 
         // Use PO row for meta fields if available, else fallback to putAway/QCFail data
@@ -262,7 +276,8 @@ export const useGRNGenerator = () => {
               "Bin": binSummary,
               "BinLocations": binListPivot[sku] || [],
               "Unit Price": bestRow["Unit Price"] || "",
-              "Amount": bestRow["Amount"] || ""
+              "Amount": bestRow["Amount"] || "",
+              "QC Fail Reason": qcFailReason
             };
           } else {
             row = {
@@ -282,7 +297,8 @@ export const useGRNGenerator = () => {
               "Bin": binSummary,
               "BinLocations": binListPivot[sku] || [],
               "Unit Price": bestRow["Unit Price"] || "",
-              "Amount": bestRow["Amount"] || ""
+              "Amount": bestRow["Amount"] || "",
+              "QC Fail Reason": qcFailReason
             };
           }
         } else {
@@ -305,7 +321,8 @@ export const useGRNGenerator = () => {
             "Bin": binSummary,
             "BinLocations": binListPivot[sku] || [],
             "Unit Price": poRow["Unit Price"] || "",
-            "Amount": poRow["Amount"] || ""
+            "Amount": poRow["Amount"] || "",
+            "QC Fail Reason": qcFailReason
           };
         }
         // Only add Ordered/Shortage/Excess if PO exists
@@ -313,6 +330,39 @@ export const useGRNGenerator = () => {
           row["Ordered Qty"] = orderedQty;
           row["Shortage Qty"] = shortageQty || 0;
           row["Excess Qty"] = excessQty || 0;
+        }
+
+        // In the finalGrnData map, for SKUs only in QC Fail (not in Put Away or PO):
+        const inPutAway = !!putawayPivot[sku];
+        const inPO = !!(skuCodeType === 'KNOT' ? poPivotByKnot[sku] : poPivot[sku]);
+        if (!inPutAway && !inPO) {
+          // Only in QC Fail
+          const failedQCQty = qcFailPivot[sku] || 0;
+          const qcFailReason = qcFailRemarks[sku] || '';
+          return {
+            "S.No": '',
+            "Brand SKU Code": '',
+            "KNOT SKU Code": '',
+            "Brand SKU": '',
+            "KNOT SKU": '',
+            "Size": '',
+            "Colors": '',
+            "Ordered Qty": 0,
+            "Received Qty": 0,
+            "Passed QC Qty": 0,
+            "Failed QC Qty": failedQCQty,
+            "Not Ordered Qty": 0,
+            "Shortage Qty": 0,
+            "Excess Qty": 0,
+            "Status": 'QC Failed Only',
+            "QC Status": 'Failed',
+            "Remarks": '',
+            "Bin": '',
+            "BinLocations": [],
+            "Unit Price": '',
+            "Amount": '',
+            "QC Fail Reason": qcFailReason
+          };
         }
         return row;
       });

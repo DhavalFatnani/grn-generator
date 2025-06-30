@@ -15,7 +15,7 @@ export const GRNTable = ({
   data = [],
   filteredData = [],
   grnHeaderInfo = {},
-  activeFilters = { status: [], qcStatus: [], issueType: [] },
+  activeFilters = { status: [], qcStatus: [], issueType: [], qcFailReason: '' },
   search = '',
   onFilterChange,
   onSearchChange,
@@ -143,6 +143,15 @@ export const GRNTable = ({
         <span key="issueType" className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${getFilterButtonClass('issueType', activeFilters.issueType, true)}`}>
           Issue: {issueLabels[activeFilters.issueType]}
           <button onClick={() => onFilterChange('issueType', activeFilters.issueType)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+        </span>
+      );
+    }
+    
+    if (activeFilters.qcFailReason) {
+      activeChips.push(
+        <span key="qcFailReason" className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 shadow-sm animate-fade-in">
+          QC Fail Reason: {activeFilters.qcFailReason}
+          <button onClick={() => onFilterChange('qcFailReason', '')} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
         </span>
       );
     }
@@ -292,6 +301,18 @@ export const GRNTable = ({
                 if (val === "bothIssues") return data.filter(item => hasQCIssue(item) && hasQtyIssue(item)).length;
                 return 0;
               }}
+            />
+          </div>
+          {/* QC Fail Reason Input */}
+          <div className="flex flex-col items-start min-w-[160px]">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase mb-0.5 tracking-wider">QC Fail Reason</span>
+            <input
+              type="text"
+              className="border border-gray-200 rounded px-2 py-1 text-sm w-full"
+              placeholder="Type to filter..."
+              value={activeFilters.qcFailReason || ''}
+              onChange={e => onFilterChange('qcFailReason', e.target.value)}
+              style={{ minWidth: 120 }}
             />
           </div>
         </div>
@@ -472,6 +493,7 @@ export const GRNTable = ({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('Remarks')}>
                 Remarks {getSortIndicator('Remarks')}
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QC Fail Reason</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -554,6 +576,7 @@ export const GRNTable = ({
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title={item["Remarks"]}>{item["Remarks"]}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title={item["QC Fail Reason"]}>{item["QC Fail Reason"]}</td>
                 </tr>
                 {expandedRow === index && item["BinLocations"] && item["BinLocations"].length > 0 && (
                   <tr className="bg-blue-50">

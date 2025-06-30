@@ -207,7 +207,7 @@ class GRNExporter {
       }
       
       // 6. FINAL STATUS AND REMARKS
-      headers.push("Status", "Remarks");
+      headers.push("Status", "Remarks", "QC Fail Reason");
       
       const dataRows = this.grnData.map((item, index) => {
         // 1. ITEM IDENTIFICATION
@@ -247,7 +247,8 @@ class GRNExporter {
         // 6. FINAL STATUS AND REMARKS
         row.push(
           item.Status || '',
-          this.generateRemarks(item)
+          this.generateRemarks(item),
+          item["QC Fail Reason"] || ''
         );
         
         return row;
@@ -333,7 +334,7 @@ class GRNExporter {
     }
     
     // 6. FINAL STATUS AND REMARKS
-    headers.push("Status", "Remarks");
+    headers.push("Status", "Remarks", "QC Fail Reason");
     
     return headers;
   }
@@ -372,7 +373,8 @@ class GRNExporter {
     // 6. FINAL STATUS AND REMARKS
     rowData.push(
       row["Status"] || "",
-      row["Remarks"] || ""
+      row["Remarks"] || "",
+      row["QC Fail Reason"] || ""
     );
     
     return rowData;
@@ -1067,7 +1069,7 @@ class GRNExporter {
     }
     
     // 6. FINAL STATUS AND REMARKS
-    headers.push("Status", "Remarks");
+    headers.push("Status", "Remarks", "QC Fail Reason");
     
     return `
       <div class="table-container">
@@ -1121,7 +1123,8 @@ class GRNExporter {
     // 6. FINAL STATUS AND REMARKS
     rowData.push(
       `<td class="status-badge ${this.getStatusClass(item.Status)}">${item.Status || ""}</td>`,
-      `<td>${this.generateRemarks(item)}</td>`
+      `<td>${this.generateRemarks(item)}</td>`,
+      `<td>${item["QC Fail Reason"] || ""}</td>`
     );
     
     return `<tr>${rowData.join('')}</tr>`;
@@ -1175,6 +1178,10 @@ class GRNExporter {
     if (item.Status === "Not Received") {
       remarks.push("Items not received");
     }
+    // Check for received status (no issues)
+    if (item.Status === "Received" || item.Status === "Complete") {
+      remarks.push("All items received as ordered");
+    }
     // Check for QC issues
     if (this.grnHeaderInfo && this.grnHeaderInfo.qcPerformed) {
       const qcRemarks = [];
@@ -1186,6 +1193,11 @@ class GRNExporter {
       }
       if (qcRemarks.length > 0) {
         remarks.push("QC: " + ((item["Failed QC Qty"] || 0) > 0 ? "Failed" : "Passed") + " (" + qcRemarks.join(", ") + ")");
+      }
+      
+      // Add QC fail remarks if available in the item data
+      if ((item["Failed QC Qty"] || 0) > 0 && item["QC Fail Reason"]) {
+        remarks.push("QC Fail Reason: " + item["QC Fail Reason"]);
       }
     }
     // Only show 'All items received as ordered' if there are no issues
@@ -1310,7 +1322,7 @@ class GRNExporter {
         }
         
         // 6. FINAL STATUS AND REMARKS
-        headers.push("Status", "Remarks");
+        headers.push("Status", "Remarks", "QC Fail Reason");
 
         // Helper function to generate remarks
         function generateRemarks(item) {
@@ -1346,6 +1358,10 @@ class GRNExporter {
           if (item.Status === "Not Received") {
             remarks.push("Items not received");
           }
+          // Check for received status (no issues)
+          if (item.Status === "Received" || item.Status === "Complete") {
+            remarks.push("All items received as ordered");
+          }
           // Check for QC issues
           if (grnHeaderInfo.qcPerformed) {
             const qcRemarks = [];
@@ -1357,6 +1373,11 @@ class GRNExporter {
             }
             if (qcRemarks.length > 0) {
               remarks.push("QC: " + ((item["Failed QC Qty"] || 0) > 0 ? "Failed" : "Passed") + " (" + qcRemarks.join(", ") + ")");
+            }
+            
+            // Add QC fail remarks if available in the item data
+            if ((item["Failed QC Qty"] || 0) > 0 && item["QC Fail Reason"]) {
+              remarks.push("QC Fail Reason: " + item["QC Fail Reason"]);
             }
           }
           // Only show blank if there are no issues
@@ -1403,7 +1424,8 @@ class GRNExporter {
           // 6. FINAL STATUS AND REMARKS
           row.push(
             item.Status || "",
-            generateRemarks(item)
+            generateRemarks(item),
+            item["QC Fail Reason"] || ""
           );
           
           return row;
@@ -1525,6 +1547,8 @@ class GRNExporter {
               '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' +
                 '<span style="padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold; display: inline-block; text-align: center; min-width: 40px; background: ' + statusBgColor + '; color: ' + statusTextColor + ';">' + row.Status + '</span>' +
               '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["Remarks"] + '</td>' +
+              '<td style="border: 1px solid #ddd; padding: 6px 4px; text-align: center; font-size: 10px; line-height: 1.2;">' + row["QC Fail Reason"] + '</td>' +
             '</tr>';
           }).join('');
 
@@ -1623,6 +1647,8 @@ class GRNExporter {
                       '<th>Excess</th>' +
                       (grnHeaderInfo.qcPerformed ? '<th>QC Status</th>' : '') +
                       '<th>Status</th>' +
+                      '<th>Remarks</th>' +
+                      '<th>QC Fail Reason</th>' +
                     '</tr>' +
                   '</thead>' +
                   '<tbody>' +
@@ -1984,7 +2010,7 @@ class GRNExporter {
     }
     
     // 6. FINAL STATUS AND REMARKS
-    headers.push("Status", "Remarks");
+    headers.push("Status", "Remarks", "QC Fail Reason");
     
     return `
       <div class="table-container">
@@ -2038,7 +2064,8 @@ class GRNExporter {
     // 6. FINAL STATUS AND REMARKS
     rowData.push(
       `<td class="status-badge ${this.getStatusClass(item.Status)}">${item.Status || ""}</td>`,
-      `<td>${this.generateRemarks(item)}</td>`
+      `<td>${this.generateRemarks(item)}</td>`,
+      `<td>${item["QC Fail Reason"] || ""}</td>`
     );
     
     return `<tr>${rowData.join('')}</tr>`;
