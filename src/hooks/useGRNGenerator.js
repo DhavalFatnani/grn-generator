@@ -24,38 +24,22 @@ export const useGRNGenerator = () => {
   }) => {
     if (acknowledgeOnly) {
       // --- Acknowledge Only Mode ---
-      // Merge SKUs from Put Away and QC Fail
-      const putawayPivot = {};
-      putAwayData.forEach(row => {
-        const sku = (row["SKU"] || row["sku"] || '').trim();
-        if (!sku) return;
-        putawayPivot[sku] = (putawayPivot[sku] || 0) + 1;
-      });
-      const qcFailPivot = {};
-      qcFailData.forEach(row => {
-        const sku = (row["SKU"] || row["sku"] || '').trim();
-        if (!sku) return;
-        qcFailPivot[sku] = (qcFailPivot[sku] || 0) + 1;
-      });
-      // Union of all SKUs
-      const allSKUs = Array.from(new Set([
-        ...Object.keys(putawayPivot),
-        ...Object.keys(qcFailPivot)
-      ]));
-      const grnRows = allSKUs.map((sku, idx) => {
-        const receivedQty = putawayPivot[sku] || 0;
-        const failedQCQty = qcFailPivot[sku] || 0;
-        const passedQCQty = Math.max(0, receivedQty - failedQCQty);
-        return {
-          "S.No": idx + 1,
-          "SKU": sku,
-          "Bin": '',
-          "Received Qty": receivedQty,
-          "Failed QC Qty": failedQCQty,
-          "Passed QC Qty": passedQCQty,
-          "Remarks": failedQCQty > 0 ? 'QC Failed' : '',
-        };
-      });
+      // Map all SKUs from putAwayData, ensuring all expected fields are present
+      const grnRows = putAwayData.map((row, idx) => ({
+        "S.No": idx + 1,
+        "Brand SKU": row["Brand SKU"] || row["Brand SKU Code"] || "",
+        "KNOT SKU": row["KNOT SKU"] || row["KNOT SKU Code"] || "",
+        "Size": row["Size"] || "",
+        "Color": row["Color"] || row["Colors"] || "",
+        "Received Qty": row["Received Qty"] || row["Quantity"] || row["Put Away Quantity"] || 1,
+        "QC Status": row["QC Status"] || "Not Performed",
+        "Passed QC Qty": row["Passed QC Qty"] || 0,
+        "Failed QC Qty": row["Failed QC Qty"] || 0,
+        "Status": "Received",
+        "Remarks": row["Remarks"] || "",
+        "QC Fail Reason": row["QC Fail Reason"] || "",
+        "Bin": row["Bin"] || row["Bin Location"] || row["bin location"] || "",
+      }));
       setGrnData(grnRows);
       setErrors([]);
       setLoading(false);
