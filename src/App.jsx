@@ -93,6 +93,8 @@ const GRNGenerator = () => {
 
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  const [downloadError, setDownloadError] = useState("");
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
   }, [isDark]);
@@ -158,9 +160,10 @@ const GRNGenerator = () => {
 
   const handleDownloadCSV = useCallback(() => {
     if (!grnData?.length || !grnHeaderInfo?.brandName || !grnHeaderInfo?.replenishmentNumber) {
-      console.error('Missing required data for CSV download');
+      setDownloadError('Please fill in all required header fields (Brand Name, Replenishment Number) before downloading.');
       return;
     }
+    setDownloadError("");
     const mergedHeaderInfo = { ...INITIAL_GRN_HEADER, ...grnHeaderInfo };
     downloadCSV(grnData, mergedHeaderInfo, { filterSummary: null });
   }, [grnData, grnHeaderInfo]);
@@ -183,9 +186,10 @@ const GRNGenerator = () => {
 
   const handleDownloadPDF = useCallback(() => {
     if (!grnData?.length || !grnHeaderInfo?.brandName || !grnHeaderInfo?.replenishmentNumber) {
-      console.error('Missing required data for PDF download');
+      setDownloadError('Please fill in all required header fields (Brand Name, Replenishment Number) before downloading.');
       return;
     }
+    setDownloadError("");
     const filterSummary = getFilterSummaryForFilename(activeFilters, search);
     downloadPDF(grnData, grnHeaderInfo, { filterSummary });
   }, [grnData, grnHeaderInfo, activeFilters, search]);
@@ -290,6 +294,9 @@ const GRNGenerator = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showExportMenu]);
 
+  // Add a boolean to check if downloads are allowed
+  const canDownload = grnData?.length > 0 && grnHeaderInfo?.brandName && grnHeaderInfo?.replenishmentNumber;
+
   return (
     <div className="min-h-screen">
       {/* Integrated App Header */}
@@ -342,6 +349,12 @@ const GRNGenerator = () => {
       <div className="py-8">
         {/* Main Card - single card for all content */}
         <div className="main-content w-full">
+          {/* Error message for download */}
+          {downloadError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 font-semibold">
+              {downloadError}
+            </div>
+          )}
           {/* Upload Files Section */}
           <section className="px-8 py-10 border-b border-gray-100">
             <label className="checkbox-row mb-8 bg-[#f6f8fa] border border-gray-200 rounded-lg px-4 py-3" style={{ maxWidth: 420 }}>
@@ -450,6 +463,7 @@ const GRNGenerator = () => {
                   }}
                   className="fab-menu-item"
                   aria-label="Download CSV"
+                  disabled={!canDownload}
                 >
                   <span className="icon">📊</span>
                   Download CSV
@@ -474,6 +488,7 @@ const GRNGenerator = () => {
                   }}
                   className="fab-menu-item"
                   aria-label="Download PDF"
+                  disabled={!canDownload}
                 >
                   <span className="icon">📄</span>
                   Download PDF

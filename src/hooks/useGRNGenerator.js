@@ -23,23 +23,47 @@ export const useGRNGenerator = () => {
     acknowledgeOnly = false,
   }) => {
     if (acknowledgeOnly) {
-      // --- Acknowledge Only Mode ---
-      // Map all SKUs from putAwayData, ensuring all expected fields are present
-      const grnRows = putAwayData.map((row, idx) => ({
-        "S.No": idx + 1,
-        "Brand SKU": row["Brand SKU"] || row["Brand SKU Code"] || "",
-        "KNOT SKU": row["KNOT SKU"] || row["KNOT SKU Code"] || "",
-        "Size": row["Size"] || "",
-        "Color": row["Color"] || row["Colors"] || "",
-        "Received Qty": row["Received Qty"] || row["Quantity"] || row["Put Away Quantity"] || 1,
-        "QC Status": row["QC Status"] || "Not Performed",
-        "Passed QC Qty": row["Passed QC Qty"] || 0,
-        "Failed QC Qty": row["Failed QC Qty"] || 0,
-        "Status": "Received",
-        "Remarks": row["Remarks"] || "",
-        "QC Fail Reason": row["QC Fail Reason"] || "",
-        "Bin": row["Bin"] || row["Bin Location"] || row["bin location"] || "",
-      }));
+      const skuKey = "SKU"; // Always use 'SKU' from the putaway file
+      const outputSkuHeader = skuCodeType === 'KNOT' ? 'KNOT SKU' : 'Brand SKU';
+      const otherSkuHeader = skuCodeType === 'KNOT' ? 'Brand SKU' : 'KNOT SKU';
+      const qtyKey = "Quantity"; // Default quantity column name
+
+      if (!putAwayData.length || !(skuKey in putAwayData[0])) {
+        setErrors([`The column 'SKU' does not exist in the putaway file.`]);
+        setGrnData([]);
+        setLoading(false);
+        return;
+      }
+
+      // Pivot putaway data by SKU
+      const skuMap = {};
+      putAwayData.forEach(row => {
+        const sku = (row[skuKey] || "").toString().trim();
+        // Skip header or invalid rows
+        if (!sku || sku.toUpperCase() === 'SKU' || sku.toUpperCase() === 'SKU ID') return;
+        const qty = parseInt(row[qtyKey], 10) || 1;
+        if (!skuMap[sku]) skuMap[sku] = 0;
+        skuMap[sku] += qty;
+      });
+
+      const grnRows = Object.entries(skuMap).map(([sku, qty], idx) => {
+        const row = {
+          "S.No": idx + 1,
+          [outputSkuHeader]: sku, // Fill only the selected column
+          [otherSkuHeader]: "",  // Leave the other blank
+          "Size": "",
+          "Color": "",
+          "Received Qty": qty,
+          "QC Status": "Passed",
+          "Passed QC Qty": qty,
+          "Failed QC Qty": 0,
+          "Status": "Received",
+          "Remarks": "All items received as ordered | QC: Passed (" + qty + " passed)",
+          "QC Fail Reason": ""
+        };
+        return row;
+      });
+
       setGrnData(grnRows);
       setErrors([]);
       setLoading(false);

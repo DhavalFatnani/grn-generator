@@ -174,21 +174,16 @@ export const GRNTable = ({
 
   // Determine if PO columns should be shown
   const showPOColumns = filteredData.some(item => typeof item["Ordered Qty"] !== 'undefined');
-  // Determine which SKU code type to show if no PO
+  // Always show both Brand SKU and KNOT SKU columns in acknowledgeOnly mode
   let showBrandSKU = true, showKnotSKU = true, showSize = true, showColors = true;
   let skuDataHeader = 'SKU';
   let showSkuData = false;
   if (!showPOColumns) {
-    // If all rows have only Brand SKU, show only Brand; if only KNOT, show only KNOT
-    const allHaveBrand = filteredData.every(item => item["Brand SKU"] && !item["KNOT SKU"]);
-    const allHaveKnot = filteredData.every(item => item["KNOT SKU"] && !item["Brand SKU"]);
-    showBrandSKU = allHaveBrand;
-    showKnotSKU = allHaveKnot;
+    showBrandSKU = true;
+    showKnotSKU = true;
     showSize = false;
     showColors = false;
-    // Show SKU data column and set header
-    showSkuData = true;
-    skuDataHeader = allHaveKnot ? 'Knot Code' : 'Brand Code';
+    showSkuData = false;
   }
 
   // --- Sorting Logic ---
@@ -506,10 +501,10 @@ export const GRNTable = ({
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["SKU Data"]}</td>
                   )}
                   {showBrandSKU && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["Brand SKU Code"] || item["Brand SKU"]}>{item["Brand SKU Code"] || item["Brand SKU"]}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["Brand SKU"]}>{item["Brand SKU"]}</td>
                   )}
                   {showKnotSKU && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["KNOT SKU Code"] || item["KNOT SKU"]}>{item["KNOT SKU Code"] || item["KNOT SKU"]}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 max-w-xs truncate" title={item["KNOT SKU"]}>{item["KNOT SKU"]}</td>
                   )}
                   {showSize && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item["Size"]}</td>
