@@ -1,0 +1,29 @@
+# Source Code Rules
+
+## Component Guidelines
+- Keep components under 300 lines when possible
+- Extract reusable logic into custom hooks
+- Use prop destructuring for cleaner code
+- Add PropTypes or TypeScript types if needed
+
+## Hook Guidelines
+- Custom hooks should start with `use`
+- Keep hooks focused on single responsibility
+- Return objects for multiple values, arrays for ordered pairs
+
+## Utility Functions
+- Keep utilities pure functions when possible
+- Add JSDoc comments for complex functions
+- Group related utilities in the same file
+
+## Error Handling
+- Use try-catch for async operations
+- Display user-friendly error messages
+- Log errors to console for debugging
+
+## Performance
+- Use React.memo for expensive components
+- Use useCallback for event handlers passed to children
+- Use useMemo for expensive calculations
+- Lazy load heavy components if needed
+

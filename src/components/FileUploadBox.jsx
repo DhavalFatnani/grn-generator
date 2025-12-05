@@ -34,7 +34,7 @@ export const FileUploadBox = ({ title, onFileUpload, onClear, data = [], loading
   };
 
   return (
-    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors bg-white">
       <input
         type="file"
         accept=".csv,.xlsx,.xls"
@@ -44,7 +44,7 @@ export const FileUploadBox = ({ title, onFileUpload, onClear, data = [], loading
         disabled={loading}
       />
       <label htmlFor={fileId} className="cursor-pointer">
-        <div className="mx-auto h-12 w-12 text-gray-400 mb-4 text-6xl">
+        <div className="mx-auto h-12 w-12 text-gray-600 mb-4 text-6xl">
           {loading ? "⏳" : "📁"}
         </div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -67,7 +67,7 @@ export const FileUploadBox = ({ title, onFileUpload, onClear, data = [], loading
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-700">
               {loading ? "Processing..." : "Click to upload CSV/Excel file"}
             </p>
             {showSampleButton && (

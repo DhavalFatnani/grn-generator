@@ -1,43 +1,31 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import "./App.css";
 import { FileUploadBox } from "./components/FileUploadBox";
 import { HeaderForm } from "./components/HeaderForm";
 import { GRNTable } from "./components/GRNTable";
 import { DataPreviewModal } from "./components/DataPreviewModal";
+import { AdminLogin } from "./components/AdminLogin";
+import { AdminDashboard } from "./components/AdminDashboard";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useGRNGenerator } from "./hooks/useGRNGenerator";
 import { downloadCSV, downloadHTML, downloadPDF } from "./utils/exportUtils";
 import { getStatusColor } from "./utils/helpers.js";
-import { DEFAULT_VALUES, INITIAL_GRN_HEADER, TEST_DATA_TEMPLATES } from "./utils/constants.js";
+import { getTeamMembersForApp, INITIAL_GRN_HEADER, TEST_DATA_TEMPLATES } from "./utils/constants.js";
+import { isAdminLoggedIn, initializeAdmin } from "./utils/supabaseAuth";
+import { saveGRNLog } from "./utils/supabaseGRNStorage";
+import { getTeamMembers } from "./utils/supabaseTeamStorage";
 
-const THEME_KEY = 'grnTheme';
-
-// Theme Context
-const ThemeContext = React.createContext();
-
-export const ThemeProvider = ({ children }) => {
-  const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    return saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    document.documentElement.classList.toggle('dark', isDark);
-  }, [isDark]);
-
-  const toggleTheme = () => setIsDark(!isDark);
-
-  return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
-};
-
-const useTheme = () => React.useContext(ThemeContext);
 
 const GRNGenerator = () => {
+  // Admin state
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+
+  // Initialize admin on mount
+  useEffect(() => {
+    initializeAdmin();
+  }, []);
+
   // File upload state and handlers
   const {
     data,
@@ -60,9 +48,27 @@ const GRNGenerator = () => {
     qcPerformed: false,
   });
 
-  // Previous values for dropdowns
-  const [previousValues, setPreviousValues] = useState(DEFAULT_VALUES);
+  // Previous values for dropdowns - load from Supabase
+  const [previousValues, setPreviousValues] = useState({ warehouseNos: [], qcPersons: [], supervisors: [], warehouseManagers: [] });
+
+  // Load team members from Supabase
+  useEffect(() => {
+    const loadTeamMembers = async () => {
+      if (!isAdminMode) {
+        try {
+          const members = await getTeamMembers();
+          setPreviousValues(members);
+        } catch (error) {
+          console.error('Error loading team members:', error);
+          // Fallback to defaults
+          setPreviousValues(getTeamMembersForApp());
+        }
+      }
+    };
+    loadTeamMembers();
+  }, [isAdminMode]);
   const [skuCodeType, setSkuCodeType] = useState("BRAND");
+  const [acknowledgeOnly, setAcknowledgeOnly] = useState(false);
 
   // GRN generation hook
   const {
@@ -87,17 +93,40 @@ const GRNGenerator = () => {
     return localStorage.getItem('grnTestMode') === 'true';
   });
 
-  const { isDark, toggleTheme } = useTheme();
+  // Track last saved GRN to prevent duplicate saves
+  const lastSavedGRNRef = useRef(null);
 
-  const [acknowledgeOnly, setAcknowledgeOnly] = useState(false);
+  // Save GRN log when GRN is generated
+  useEffect(() => {
+    if (grnData && grnData.length > 0 && grnHeaderInfo?.brandName && grnHeaderInfo?.replenishmentNumber) {
+      // Create a unique identifier for this GRN
+      const grnKey = `${grnHeaderInfo.brandName}-${grnHeaderInfo.replenishmentNumber}-${grnData.length}-${JSON.stringify(grnData[0])}`;
+      
+      // Only save if this is a new GRN (different from last saved)
+      if (lastSavedGRNRef.current !== grnKey) {
+        // Save GRN log to Supabase
+        saveGRNLog(grnData, grnHeaderInfo, {
+          acknowledgeOnly,
+          skuCodeType,
+          purchaseOrderData: acknowledgeOnly ? [] : data.purchaseOrder,
+          putAwayData: data.putAway,
+          qcFailData: data.qcFail
+        }).then(result => {
+          if (result.success) {
+            lastSavedGRNRef.current = grnKey;
+          } else {
+            console.error('Failed to save GRN log:', result.error);
+          }
+        }).catch(error => {
+          console.error('Error saving GRN log:', error);
+        });
+      }
+    }
+  }, [grnData, grnHeaderInfo?.brandName, grnHeaderInfo?.replenishmentNumber, acknowledgeOnly, skuCodeType]);
 
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [downloadError, setDownloadError] = useState("");
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
-  }, [isDark]);
 
   // Keyboard shortcut: Ctrl+Shift+T (or Cmd+Shift+T)
   useEffect(() => {
@@ -165,8 +194,13 @@ const GRNGenerator = () => {
     }
     setDownloadError("");
     const mergedHeaderInfo = { ...INITIAL_GRN_HEADER, ...grnHeaderInfo };
-    downloadCSV(grnData, mergedHeaderInfo, { filterSummary: null });
-  }, [grnData, grnHeaderInfo]);
+    downloadCSV(grnData, mergedHeaderInfo, { 
+      filterSummary: null,
+      purchaseOrderData: acknowledgeOnly ? [] : data.purchaseOrder,
+      putAwayData: data.putAway,
+      qcFailData: data.qcFail
+    });
+  }, [grnData, grnHeaderInfo, data, acknowledgeOnly]);
 
   const handleDownloadFilteredCSV = useCallback(() => {
     const filteredData = getFilteredData();
@@ -297,48 +331,66 @@ const GRNGenerator = () => {
   // Add a boolean to check if downloads are allowed
   const canDownload = grnData?.length > 0 && grnHeaderInfo?.brandName && grnHeaderInfo?.replenishmentNumber;
 
+  // Handle admin login success
+  const handleAdminLoginSuccess = () => {
+    setIsAdminMode(true);
+  };
+
+  // Handle admin logout
+  const handleAdminLogout = () => {
+    setIsAdminMode(false);
+    setShowAdmin(false);
+  };
+
+  // Show admin login or dashboard
+  if (showAdmin) {
+    if (isAdminLoggedIn()) {
+      return (
+        <AdminDashboard onLogout={handleAdminLogout} />
+      );
+    } else {
+      return (
+        <AdminLogin onLoginSuccess={handleAdminLoginSuccess} />
+      );
+    }
+  }
+
   return (
     <div className="min-h-screen">
       {/* Integrated App Header */}
-      <header className=" dark:from-gray-900 dark:via-gray-800 dark:to-gray-800 dark:border-gray-700/50 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-6 py-6">
+      <header className="transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-6 py-6 bg-transparent">
           <div className="flex items-center justify-between">
             {/* Logo and Title */}
             <div className="flex items-center justify-center gap-4">
               {/* Logo with subtle background */}
-              <div className="flex items-center justify-center w-10 h-10 bg-blue-500/10 rounded-lg dark:bg-blue-400/20 transition-colors duration-200">
+              <div className="flex items-center justify-center w-10 h-10 bg-blue-500/10 rounded-lg transition-colors duration-200">
                 <img src="/logo.png" alt="KNOT Logo" className="w-6 h-6" />
               </div>
               
               {/* Title with better typography */}
               <div className="text-center">
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent dark:from-blue-400 dark:to-indigo-400 mt-3 transition-colors duration-200">
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mt-3 transition-colors duration-200">
                   GRN Generator
                 </h1>
               </div>
             </div>
 
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-all duration-200 shadow-sm"
-              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {isDark ? (
-                <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-                </svg>
-              )}
-            </button>
+            {/* Admin Link */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowAdmin(true)}
+                className="px-4 py-2 text-sm font-semibold text-white hover:text-blue-200 transition-colors"
+                title="Admin Dashboard"
+              >
+                Admin
+              </button>
+            </div>
           </div>
         </div>
         
         {/* Subtle decorative element that flows into content */}
-        <div className="h-1 bg-gradient-to-r from-transparent via-blue-200/30 to-transparent dark:via-gray-600/30 transition-colors duration-200"></div>
+        <div className="h-1 bg-gradient-to-r from-transparent via-blue-200/30 to-transparent transition-colors duration-200"></div>
       </header>
       {/* Test Mode Banner */}
       {testMode && (
@@ -364,9 +416,9 @@ const GRNGenerator = () => {
                 onChange={e => setAcknowledgeOnly(e.target.checked)}
                 className="accent-blue-600"
               />
-              <span>No Purchase Order (Acknowledge Only)</span>
+              <span className="text-gray-700">No Purchase Order (Acknowledge Only)</span>
             </label>
-            <h2 className="text-2xl font-bold mb-6">Upload Files</h2>
+            <h2 className="text-2xl font-bold mb-6 text-gray-900">Upload Files</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {!acknowledgeOnly && (
             <FileUploadBox
@@ -402,19 +454,19 @@ const GRNGenerator = () => {
 
           {/* File Upload Guidelines section (alt background, extra spacing) */}
           <section className="section-alt px-8 py-8 border-b border-gray-100 mt-14 mb-14">
-            <h2 className="text-2xl font-bold mb-4">File Upload Guidelines</h2>
-            <ul className="list-disc pl-6 text-base text-gray-700 space-y-1">
-              <li><strong>Purchase Order:</strong> It should contain all metadata, vendor/brand info, and a table with columns like <em>Sno, Brand SKU Code, Size, Colors, Quantity, Unit Price, Amount</em>. Do not remove or edit header rows.</li>
-              <li><strong>Put Away:</strong> Upload a CSV with columns <em>SKU</em> and <em>BIN</em>. Each row represents a single SKU that has been received and put away in its bin location. No extra metadata is needed.</li>
-              <li><strong>QC Fail:</strong> Upload a CSV with columns <em>SKU</em> and <em>REMARK</em>. List only SKUs that failed QC, with a brief remark for each.</li>
-              <li>All files must be in <strong>CSV</strong> format. Excel files should be saved/exported as CSV before uploading.</li>
-              <li>Do not modify the structure or remove any columns from the original files.</li>
+            <h2 className="text-2xl font-bold mb-4 text-gray-900">File Upload Guidelines</h2>
+            <ul className="list-disc pl-6 text-base text-gray-900 space-y-1">
+              <li className="text-gray-900"><strong className="text-gray-900">Purchase Order:</strong> It should contain all metadata, vendor/brand info, and a table with columns like <em className="text-gray-800">Sno, Brand SKU Code, Size, Colors, Quantity, Unit Price, Amount</em>. Do not remove or edit header rows.</li>
+              <li className="text-gray-900"><strong className="text-gray-900">Put Away:</strong> Upload a CSV with columns <em className="text-gray-800">SKU</em> and <em className="text-gray-800">BIN</em>. Each row represents a single SKU that has been received and put away in its bin location. No extra metadata is needed.</li>
+              <li className="text-gray-900"><strong className="text-gray-900">QC Fail:</strong> Upload a CSV with columns <em className="text-gray-800">SKU</em> and <em className="text-gray-800">REMARK</em>. List only SKUs that failed QC, with a brief remark for each.</li>
+              <li className="text-gray-900">All files must be in <strong className="text-gray-900">CSV</strong> format. Excel files should be saved/exported as CSV before uploading.</li>
+              <li className="text-gray-900">Do not modify the structure or remove any columns from the original files.</li>
             </ul>
           </section>
 
           {/* Header Form */}
           <section className="px-8 py-10 border-b bg-white border-gray-100 mt-14 mb-14">
-            <h2 className="text-2xl font-bold">GRN Header Information</h2>
+            <h2 className="text-2xl font-bold text-gray-900">GRN Header Information</h2>
             <p className="text-sm text-gray-600 mt-2 mb-6">
               Please verify and complete the following information. Fields marked with <span className="text-blue-500">*</span> are required.
             </p>
@@ -442,8 +494,8 @@ const GRNGenerator = () => {
           {/* Error Display */}
           {(fileErrors.length > 0 || grnErrors.length > 0) && (
             <section className="mx-8 mb-10 p-4 rounded border bg-red-100 border-red-400 text-red-700">
-              <h3 className="text-xl font-bold mb-2">Errors</h3>
-              <ul className="list-disc list-inside space-y-1 text-base">
+              <h3 className="text-xl font-bold mb-2 text-red-800">Errors</h3>
+              <ul className="list-disc list-inside space-y-1 text-base text-red-800">
                 {[...fileErrors, ...grnErrors].map((error, index) => (
                   <li key={index}>{error}</li>
                 ))}
@@ -496,8 +548,7 @@ const GRNGenerator = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setGrnData([]);
-                    setGrnHeaderInfo({});
+                    handleClearAll();
                     setShowExportMenu(false);
                   }}
                   className="fab-menu-item danger"
@@ -522,7 +573,7 @@ const GRNGenerator = () => {
           {/* GRN Display Table (alt background, extra spacing) */}
         {grnData.length > 0 && (
             <section className="section-alt px-8 pb-10 mt-14 mb-8">
-              <h2 className="text-2xl font-bold mb-6">GRN Table</h2>
+              <h2 className="text-2xl font-bold mb-6 text-gray-900">GRN Table</h2>
             <GRNTable
               data={grnData}
               filteredData={filteredData}
@@ -559,13 +610,9 @@ const GRNGenerator = () => {
   );
 };
 
-// Main App wrapper with theme provider
+// Main App wrapper
 const App = () => {
-  return (
-    <ThemeProvider>
-      <GRNGenerator />
-    </ThemeProvider>
-  );
+  return <GRNGenerator />;
 };
 
 export default App; 

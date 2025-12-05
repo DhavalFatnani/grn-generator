@@ -108,7 +108,7 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
   };
 
   return (
-    <div className="p-6 rounded-lg bg-white border border-gray-200 shadow-sm">
+    <div className="p-8 rounded-xl bg-white border border-gray-200 shadow-md hover:shadow-lg transition-shadow duration-300">
       {testMode && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
           <div className="flex items-center">
@@ -123,7 +123,7 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
           {testMode && (
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-500">Quick Fill:</span>
+                <span className="text-sm text-gray-700">Quick Fill:</span>
                 <select
                   onChange={(e) => handleTestDataTemplate(e.target.value)}
                   className="px-3 py-1 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -148,12 +148,12 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
       </div>
 
       {/* Required GRN Information */}
-      <div className="mb-8">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">Required GRN Information</h3>
+      <div className="mb-10">
+        <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">Required GRN Information</h3>
         <div className="grid md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Replenishment Number <span className="text-blue-500">*</span>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Replenishment Number <span className="text-blue-600 font-bold">*</span>
             </label>
             <input
               type="text"
@@ -166,8 +166,8 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Inward Date <span className="text-blue-500">*</span>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Inward Date <span className="text-blue-600 font-bold">*</span>
             </label>
             <div
               className="relative cursor-pointer"
@@ -191,12 +191,12 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
       </div>
 
       {/* Warehouse Information */}
-      <div className="mb-8">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">Warehouse Information</h3>
+      <div className="mb-10">
+        <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">Warehouse Information</h3>
         <div className="grid md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Warehouse No <span className="text-blue-500">*</span>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Warehouse No <span className="text-blue-600 font-bold">*</span>
             </label>
             <div className="space-y-2">
               <select
@@ -245,8 +245,8 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Warehouse Manager Name <span className="text-blue-500">*</span>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Warehouse Manager Name <span className="text-blue-600 font-bold">*</span>
             </label>
             <div className="space-y-2">
               <select
@@ -299,7 +299,7 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
 
       {/* QC and Verification Information */}
       <div>
-        <h3 className="text-sm font-medium text-gray-700 mb-3">QC and Verification Information</h3>
+        <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">QC and Verification Information</h3>
         
         {/* QC Performed Checkbox */}
         <div className="mb-4">
@@ -319,7 +319,7 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
           {/* QC Done By - Only show if QC is performed */}
           {grnHeaderInfo.qcPerformed && (
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
                 QC Done By
             </label>
             <div className="space-y-2">
@@ -372,8 +372,8 @@ export const HeaderForm = ({ grnHeaderInfo, onHeaderChange, previousValues, setP
           )}
           
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Verified By <span className="text-blue-500">*</span>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Verified By <span className="text-blue-600 font-bold">*</span>
             </label>
             <div className="space-y-2">
               <select

@@ -1,4 +1,5 @@
 // GRN Export Utilities - Object-Oriented and Functional Approach
+import * as XLSX from 'xlsx';
 
 class GRNExporter {
   constructor(grnData, grnHeaderInfo) {
@@ -260,6 +261,493 @@ class GRNExporter {
       ];
     }
     return this.convertToCSVString(csvData);
+  }
+
+  // Generate Excel file with multiple sheets
+  generateExcel(options = {}) {
+    const { 
+      isFilteredExport = false,
+      purchaseOrderData = [],
+      putAwayData = [],
+      qcFailData = []
+    } = options;
+    
+    // Create a new workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Only create multiple sheets for full exports (not filtered)
+    if (!isFilteredExport) {
+      // 1. PO Sheet
+      if (purchaseOrderData && purchaseOrderData.length > 0) {
+        const poSheet = this.createPOSheet(purchaseOrderData);
+        XLSX.utils.book_append_sheet(wb, poSheet, "PO");
+      }
+      
+      // 2. Putaway Sheet
+      if (putAwayData && putAwayData.length > 0) {
+        const putawaySheet = this.createPutawaySheet(putAwayData);
+        XLSX.utils.book_append_sheet(wb, putawaySheet, "Putaway");
+      }
+      
+      // 3. QC Fail Sheet (only if QC fail data exists)
+      if (qcFailData && qcFailData.length > 0) {
+        const qcFailSheet = this.createQCFailSheet(qcFailData);
+        XLSX.utils.book_append_sheet(wb, qcFailSheet, "QC Fail");
+      }
+    }
+    
+    // 4. GRN Report Summary Sheet (always the last sheet)
+    const grnSummarySheet = this.createGRNSummarySheet(isFilteredExport);
+    XLSX.utils.book_append_sheet(wb, grnSummarySheet, "GRN Report Summary");
+    
+    return wb;
+  }
+
+  // Create PO Sheet
+  createPOSheet(poData) {
+    if (!poData || poData.length === 0) {
+      return XLSX.utils.aoa_to_sheet([["No Purchase Order data available"]]);
+    }
+    
+    // Get all unique headers from the data
+    const headers = new Set();
+    poData.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (key && key.trim() !== '') {
+          headers.add(key);
+        }
+      });
+    });
+    
+    const headerArray = Array.from(headers);
+    const dataRows = poData.map(row => 
+      headerArray.map(header => row[header] || '')
+    );
+    
+    const allData = [headerArray.map(h => h.toUpperCase()), ...dataRows];
+    const ws = XLSX.utils.aoa_to_sheet(allData);
+    
+    // Set column widths
+    const colWidths = headerArray.map((header, idx) => {
+      let maxLength = header ? header.toString().length : 10;
+      dataRows.forEach(row => {
+        const cellValue = row[idx];
+        if (cellValue !== undefined && cellValue !== null) {
+          maxLength = Math.max(maxLength, cellValue.toString().length);
+        }
+      });
+      return { wch: Math.min(Math.max(maxLength + 2, 12), 50) };
+    });
+    ws['!cols'] = colWidths;
+    
+    // Format header row
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (ws[cellAddress]) {
+        ws[cellAddress].s = {
+          font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "2563EB" } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } }
+          }
+        };
+      }
+    }
+    
+    // Add borders to all cells
+    for (let row = 0; row <= range.e.r; row++) {
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!ws[cellAddress]) ws[cellAddress] = { t: 's', v: '' };
+        if (!ws[cellAddress].s) ws[cellAddress].s = {};
+        ws[cellAddress].s.border = {
+          top: { style: "thin", color: { rgb: "DDDDDD" } },
+          bottom: { style: "thin", color: { rgb: "DDDDDD" } },
+          left: { style: "thin", color: { rgb: "DDDDDD" } },
+          right: { style: "thin", color: { rgb: "DDDDDD" } }
+        };
+      }
+    }
+    
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    
+    return ws;
+  }
+
+  // Create Putaway Sheet
+  createPutawaySheet(putawayData) {
+    if (!putawayData || putawayData.length === 0) {
+      return XLSX.utils.aoa_to_sheet([["No Putaway data available"]]);
+    }
+    
+    // Get all unique headers from the data
+    const headers = new Set();
+    putawayData.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (key && key.trim() !== '') {
+          headers.add(key);
+        }
+      });
+    });
+    
+    const headerArray = Array.from(headers);
+    const dataRows = putawayData.map(row => 
+      headerArray.map(header => row[header] || '')
+    );
+    
+    const allData = [headerArray.map(h => h.toUpperCase()), ...dataRows];
+    const ws = XLSX.utils.aoa_to_sheet(allData);
+    
+    // Set column widths
+    const colWidths = headerArray.map((header, idx) => {
+      let maxLength = header ? header.toString().length : 10;
+      dataRows.forEach(row => {
+        const cellValue = row[idx];
+        if (cellValue !== undefined && cellValue !== null) {
+          maxLength = Math.max(maxLength, cellValue.toString().length);
+        }
+      });
+      return { wch: Math.min(Math.max(maxLength + 2, 12), 50) };
+    });
+    ws['!cols'] = colWidths;
+    
+    // Format header row
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (ws[cellAddress]) {
+        ws[cellAddress].s = {
+          font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "2563EB" } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } }
+          }
+        };
+      }
+    }
+    
+    // Add borders to all cells
+    for (let row = 0; row <= range.e.r; row++) {
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!ws[cellAddress]) ws[cellAddress] = { t: 's', v: '' };
+        if (!ws[cellAddress].s) ws[cellAddress].s = {};
+        ws[cellAddress].s.border = {
+          top: { style: "thin", color: { rgb: "DDDDDD" } },
+          bottom: { style: "thin", color: { rgb: "DDDDDD" } },
+          left: { style: "thin", color: { rgb: "DDDDDD" } },
+          right: { style: "thin", color: { rgb: "DDDDDD" } }
+        };
+      }
+    }
+    
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    
+    return ws;
+  }
+
+  // Create QC Fail Sheet
+  createQCFailSheet(qcFailData) {
+    if (!qcFailData || qcFailData.length === 0) {
+      return XLSX.utils.aoa_to_sheet([["No QC Fail data available"]]);
+    }
+    
+    // Get all unique headers from the data
+    const headers = new Set();
+    qcFailData.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (key && key.trim() !== '') {
+          headers.add(key);
+        }
+      });
+    });
+    
+    const headerArray = Array.from(headers);
+    const dataRows = qcFailData.map(row => 
+      headerArray.map(header => row[header] || '')
+    );
+    
+    const allData = [headerArray.map(h => h.toUpperCase()), ...dataRows];
+    const ws = XLSX.utils.aoa_to_sheet(allData);
+    
+    // Set column widths
+    const colWidths = headerArray.map((header, idx) => {
+      let maxLength = header ? header.toString().length : 10;
+      dataRows.forEach(row => {
+        const cellValue = row[idx];
+        if (cellValue !== undefined && cellValue !== null) {
+          maxLength = Math.max(maxLength, cellValue.toString().length);
+        }
+      });
+      return { wch: Math.min(Math.max(maxLength + 2, 12), 50) };
+    });
+    ws['!cols'] = colWidths;
+    
+    // Format header row
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (ws[cellAddress]) {
+        ws[cellAddress].s = {
+          font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "2563EB" } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } }
+          }
+        };
+      }
+    }
+    
+    // Add borders to all cells
+    for (let row = 0; row <= range.e.r; row++) {
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!ws[cellAddress]) ws[cellAddress] = { t: 's', v: '' };
+        if (!ws[cellAddress].s) ws[cellAddress].s = {};
+        ws[cellAddress].s.border = {
+          top: { style: "thin", color: { rgb: "DDDDDD" } },
+          bottom: { style: "thin", color: { rgb: "DDDDDD" } },
+          left: { style: "thin", color: { rgb: "DDDDDD" } },
+          right: { style: "thin", color: { rgb: "DDDDDD" } }
+        };
+      }
+    }
+    
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    
+    return ws;
+  }
+
+  // Create GRN Report Summary Sheet
+  createGRNSummarySheet(isFilteredExport = false) {
+    const allData = [];
+    let headerRowIndex = 0;
+    
+    if (!isFilteredExport) {
+      const summaryStats = this.calculateSummaryStats();
+      
+      // Add metadata section with better formatting
+      allData.push(["GOODS RECEIVED NOTE (GRN)"]);
+      allData.push(["Document Number", this.documentNumber]);
+      allData.push(["Generated Date", this.today.toLocaleDateString("en-GB")]);
+      allData.push(["Generated Time", this.today.toLocaleTimeString()]);
+      allData.push([]); // Empty row
+      
+      allData.push(["ORDER INFORMATION"]);
+      allData.push(["PO Number", this.grnHeaderInfo.poNumber || ""]);
+      allData.push(["Vendor/Brand", this.grnHeaderInfo.brandName || ""]);
+      allData.push(["Replenishment Number", this.grnHeaderInfo.replenishmentNumber || ""]);
+      allData.push([]); // Empty row
+      
+      allData.push(["RECEIPT INFORMATION"]);
+      allData.push(["Inward Date", this.grnHeaderInfo.inwardDate || ""]);
+      allData.push(["Warehouse", this.grnHeaderInfo.warehouseNo || ""]);
+      allData.push(["Receipt Accuracy", summaryStats.receiptAccuracy + "%"]);
+      allData.push([]); // Empty row
+      
+      allData.push(["SUMMARY STATISTICS"]);
+      allData.push(["Total Ordered Units", summaryStats.totalOrderedUnits]);
+      allData.push(["Total Received Units", summaryStats.totalReceivedUnits]);
+      allData.push(["Total Shortage Units", summaryStats.totalShortageUnits]);
+      allData.push(["Total Excess Units", summaryStats.totalExcessUnits]);
+      allData.push(["Total Not Ordered Units", summaryStats.totalNotOrderedUnits]);
+      
+      if (this.grnHeaderInfo.qcPerformed) {
+        allData.push(["Total QC Passed Units", summaryStats.totalQcPassedUnits]);
+        allData.push(["Total QC Failed Units", summaryStats.totalQcFailedUnits]);
+        allData.push(["QC Pass Rate", summaryStats.qcPassRate + "%"]);
+      }
+      
+      allData.push([]); // Empty row
+      allData.push([]); // Empty row
+      
+      headerRowIndex = allData.length;
+    }
+    
+    // Prepare headers
+    let headers = [];
+    if (isFilteredExport) {
+      if (this.grnData.length === 0) {
+        const ws = XLSX.utils.aoa_to_sheet([["No data available"]]);
+        return ws;
+      }
+      headers = Object.keys(this.grnData[0]);
+      const dataRows = this.grnData.map(row => headers.map(h => row[h] || ''));
+      allData.push(headers.map(h => h.toUpperCase()), ...dataRows);
+      headerRowIndex = allData.length - dataRows.length - 1;
+    } else {
+      headers = [
+        "S.No", "Brand SKU", "KNOT SKU", "Size", "Color"
+      ];
+      
+      if (this.hasPOColumns()) {
+        headers.push("Ordered Qty");
+      }
+      
+      headers.push("Received Qty");
+      
+      if (this.grnHeaderInfo.qcPerformed) {
+        headers.push("QC Status", "Passed QC Qty", "Failed QC Qty");
+      }
+      
+      if (this.hasPOColumns()) {
+        headers.push("Shortage Qty", "Excess Qty");
+      }
+      
+      headers.push("Status", "Remarks", "QC Fail Reason");
+      
+      const dataRows = this.grnData.map((item, index) => {
+        const row = [
+          index + 1,
+          this.getBrandSku(item),
+          this.getKnotSku(item),
+          item["Size"] || '',
+          item["Color"] || ''
+        ];
+        
+        if (this.hasPOColumns()) {
+          row.push(item["Ordered Qty"] || 0);
+        }
+        
+        row.push(item["Received Qty"] || 0);
+        
+        if (this.grnHeaderInfo.qcPerformed) {
+          row.push(
+            item["QC Status"] || '',
+            item["Passed QC Qty"] || 0,
+            item["Failed QC Qty"] || 0
+          );
+        }
+        
+        if (this.hasPOColumns()) {
+          row.push(
+            item["Shortage Qty"] || 0,
+            item["Excess Qty"] || 0
+          );
+        }
+        
+        row.push(
+          item.Status || '',
+          this.generateRemarks(item),
+          item["QC Fail Reason"] || ''
+        );
+        
+        return row;
+      });
+      
+      // Add headers in uppercase for better visibility
+      allData.push(headers.map(h => h.toUpperCase()), ...dataRows);
+    }
+    
+    // Create worksheet from data
+    const ws = XLSX.utils.aoa_to_sheet(allData);
+    
+    // Set column widths for better readability
+    const colWidths = [];
+    for (let col = 0; col < headers.length; col++) {
+      let maxLength = headers[col] ? headers[col].toString().length : 10;
+      // Check data rows
+      for (let row = headerRowIndex + 1; row < allData.length; row++) {
+        if (allData[row] && allData[row][col] !== undefined) {
+          const cellValue = allData[row][col];
+          const cellLength = cellValue ? cellValue.toString().length : 0;
+          maxLength = Math.max(maxLength, cellLength);
+        }
+      }
+      colWidths.push({ wch: Math.min(Math.max(maxLength + 3, 12), 60) });
+    }
+    ws['!cols'] = colWidths;
+    
+    // Format title rows (if not filtered)
+    if (!isFilteredExport) {
+      const titleRows = [0, 5, 10, 15];
+      titleRows.forEach(rowIdx => {
+        if (allData[rowIdx] && allData[rowIdx][0]) {
+          const cellAddress = XLSX.utils.encode_cell({ r: rowIdx, c: 0 });
+          if (ws[cellAddress]) {
+            if (!ws[cellAddress].s) ws[cellAddress].s = {};
+            ws[cellAddress].s.font = { bold: true, sz: 11 };
+            ws[cellAddress].s.alignment = { horizontal: "left", vertical: "center" };
+          }
+        }
+      });
+    }
+    
+    // Format header row
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: headerRowIndex, c: col });
+      if (ws[cellAddress]) {
+        if (!ws[cellAddress].s) ws[cellAddress].s = {};
+        ws[cellAddress].s.font = { bold: true, sz: 12, color: { rgb: "FFFFFF" } };
+        ws[cellAddress].s.fill = { fgColor: { rgb: "2563EB" } };
+        ws[cellAddress].s.alignment = { horizontal: "center", vertical: "center", wrapText: true };
+        ws[cellAddress].s.border = {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        };
+      }
+    }
+    
+    // Center numeric columns
+    const numericColIndices = [];
+    headers.forEach((header, idx) => {
+      if (header && (header.includes("Qty") || header.includes("S.No"))) {
+        numericColIndices.push(idx);
+      }
+    });
+    
+    for (let row = headerRowIndex + 1; row <= range.e.r; row++) {
+      numericColIndices.forEach(col => {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        if (ws[cellAddress] && ws[cellAddress].v !== null && ws[cellAddress].v !== '') {
+          if (!ws[cellAddress].s) ws[cellAddress].s = {};
+          ws[cellAddress].s.alignment = { 
+            ...ws[cellAddress].s.alignment,
+            horizontal: "center",
+            vertical: "center"
+          };
+        }
+      });
+    }
+    
+    // Add borders to all data cells
+    for (let row = headerRowIndex; row <= range.e.r; row++) {
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!ws[cellAddress]) ws[cellAddress] = { t: 's', v: '' };
+        if (!ws[cellAddress].s) ws[cellAddress].s = {};
+        ws[cellAddress].s.border = {
+          top: { style: "thin", color: { rgb: "DDDDDD" } },
+          bottom: { style: "thin", color: { rgb: "DDDDDD" } },
+          left: { style: "thin", color: { rgb: "DDDDDD" } },
+          right: { style: "thin", color: { rgb: "DDDDDD" } }
+        };
+      }
+    }
+    
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: headerRowIndex + 1, topLeftCell: `A${headerRowIndex + 2}`, activePane: 'bottomLeft', state: 'frozen' };
+    
+    return ws;
   }
 
   calculateQCPassedOrdered() {
@@ -2181,29 +2669,62 @@ function downloadHTML(grnData, grnHeaderInfo, options = {}) {
 }
 
 function downloadCSV(grnData, grnHeaderInfo, options = {}) {
-  const { isFilteredExport = false, filterSummary } = options;
+  const { 
+    isFilteredExport = false, 
+    filterSummary,
+    purchaseOrderData = [],
+    putAwayData = [],
+    qcFailData = []
+  } = options;
   const exporter = new GRNExporter(grnData, grnHeaderInfo);
-  const csvContent = exporter.generateCSV({ isFilteredExport });
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
+  
+  // Generate Excel file with formatting and multiple sheets
+  const wb = exporter.generateExcel({ 
+    isFilteredExport,
+    purchaseOrderData,
+    putAwayData,
+    qcFailData
+  });
+  if (!wb) {
+    console.error('Failed to generate Excel file');
+    return;
+  }
+  
+  // Generate filename
   let filename;
   if (isFilteredExport) {
     const dateStr = new Date().toISOString().split('T')[0];
     const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/:/g, "-");
     filename = `filtered-export-${dateStr}-${timeStr}-${grnHeaderInfo.brandName.replace(/\s+/g, "")}-${grnHeaderInfo.replenishmentNumber}`;
     if (filterSummary) filename += `_${sanitizeForFilename(filterSummary)}`;
-    a.download = `${filename}.csv`;
   } else {
     filename = `${exporter.documentNumber}`;
     if (filterSummary) filename += `_${sanitizeForFilename(filterSummary)}`;
-    a.download = `${filename}.csv`;
   }
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  
+  // Write Excel file
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
+// Generate Excel workbook without downloading (for ZIP export)
+export function generateExcelWorkbook(grnData, grnHeaderInfo, options = {}) {
+  const { 
+    isFilteredExport = false, 
+    purchaseOrderData = [],
+    putAwayData = [],
+    qcFailData = []
+  } = options;
+  const exporter = new GRNExporter(grnData, grnHeaderInfo);
+  
+  // Generate Excel file with formatting and multiple sheets
+  const wb = exporter.generateExcel({ 
+    isFilteredExport,
+    purchaseOrderData,
+    putAwayData,
+    qcFailData
+  });
+  
+  return wb;
 }
 
 function downloadPDF(grnData, grnHeaderInfo, options = {}) {

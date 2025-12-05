@@ -123,7 +123,7 @@ export const GRNTable = ({
       activeChips.push(
         <span key="status" className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${getFilterButtonClass('status', activeFilters.status, true)}`}>
           Status: {activeFilters.status}
-          <button onClick={() => onFilterChange('status', activeFilters.status)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+          <button onClick={() => onFilterChange('status', activeFilters.status)} className="ml-2 text-gray-600 hover:text-gray-800">×</button>
         </span>
       );
     }
@@ -132,7 +132,7 @@ export const GRNTable = ({
       activeChips.push(
         <span key="qcStatus" className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${getFilterButtonClass('qcStatus', activeFilters.qcStatus, true)}`}>
           QC: {activeFilters.qcStatus}
-          <button onClick={() => onFilterChange('qcStatus', activeFilters.qcStatus)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+          <button onClick={() => onFilterChange('qcStatus', activeFilters.qcStatus)} className="ml-2 text-gray-600 hover:text-gray-800">×</button>
         </span>
       );
     }
@@ -142,7 +142,7 @@ export const GRNTable = ({
       activeChips.push(
         <span key="issueType" className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${getFilterButtonClass('issueType', activeFilters.issueType, true)}`}>
           Issue: {issueLabels[activeFilters.issueType]}
-          <button onClick={() => onFilterChange('issueType', activeFilters.issueType)} className="ml-2 text-gray-500 hover:text-gray-700">×</button>
+          <button onClick={() => onFilterChange('issueType', activeFilters.issueType)} className="ml-2 text-gray-600 hover:text-gray-800">×</button>
         </span>
       );
     }
@@ -242,13 +242,13 @@ export const GRNTable = ({
         </div>
       )}
       {/* Modern Filter Bar - rewritten */}
-      <div className="relative bg-white shadow-sm rounded-lg px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div className="relative bg-white shadow-sm rounded-lg px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 border border-gray-200">
         {/* Search Box */}
         <div className="flex items-center gap-2 w-full md:w-auto z-10">
-          <span className="text-gray-400 flex items-center justify-center h-6 w-6"><svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+          <span className="text-gray-600 flex items-center justify-center h-6 w-6"><svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
           <input
             type="text"
-            className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 w-full md:w-48 transition-colors"
+            className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 w-full md:w-48 transition-colors placeholder-gray-500 text-gray-900"
             placeholder="Search by SKU, Size, or Color..."
             value={search}
             onChange={e => onSearchChange(e.target.value)}
@@ -258,7 +258,7 @@ export const GRNTable = ({
         <div className="flex flex-row gap-3 w-full md:w-auto items-end md:items-center justify-center">
           {/* Status Dropdown */}
           <div className="flex flex-col items-start min-w-[100px]">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase mb-0.5 tracking-wider">Status</span>
+            <span className="text-[10px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wider">Status</span>
             <DropdownFilter
               label={activeFilters.status.length > 0 ? activeFilters.status.join(', ') : 'All'}
               options={statusOptions}
@@ -269,7 +269,7 @@ export const GRNTable = ({
           </div>
           {/* QC Status Dropdown */}
           <div className="flex flex-col items-start min-w-[100px]">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase mb-0.5 tracking-wider">QC Status</span>
+            <span className="text-[10px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wider">QC Status</span>
             <DropdownFilter
               label={activeFilters.qcStatus.length > 0 ? activeFilters.qcStatus.join(', ') : 'All'}
               options={qcStatusOptions}
@@ -281,7 +281,7 @@ export const GRNTable = ({
           </div>
           {/* Issue Type Dropdown */}
           <div className="flex flex-col items-start min-w-[100px]">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase mb-0.5 tracking-wider">Issue Type</span>
+            <span className="text-[10px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wider">Issue Type</span>
             <DropdownFilter
               label={activeFilters.issueType.length > 0 ? activeFilters.issueType.map(val => issueTypeLabels[val] || val).join(', ') : 'All'}
               options={issueTypeOptions}
@@ -300,10 +300,10 @@ export const GRNTable = ({
           </div>
           {/* QC Fail Reason Input */}
           <div className="flex flex-col items-start min-w-[160px]">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase mb-0.5 tracking-wider">QC Fail Reason</span>
+            <span className="text-[10px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wider">QC Fail Reason</span>
             <input
               type="text"
-              className="border border-gray-200 rounded px-2 py-1 text-sm w-full"
+              className="border border-gray-200 rounded px-2 py-1 text-sm w-full placeholder-gray-500 text-gray-900 bg-white"
               placeholder="Type to filter..."
               value={activeFilters.qcFailReason || ''}
               onChange={e => onFilterChange('qcFailReason', e.target.value)}
@@ -356,7 +356,7 @@ export const GRNTable = ({
               {`Status: ${val}`}
               <button
                 onClick={() => onFilterChange('status', val)}
-                className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
+                className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-600 hover:text-white hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
                 aria-label={`Remove ${val}`}
                 tabIndex={0}
                 style={{ lineHeight: 1, fontSize: '14px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -374,7 +374,7 @@ export const GRNTable = ({
               {`QC: ${val}`}
               <button
                 onClick={() => onFilterChange('qcStatus', val)}
-                className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
+                className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-600 hover:text-white hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
                 aria-label={`Remove ${val}`}
                 tabIndex={0}
                 style={{ lineHeight: 1, fontSize: '14px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -392,7 +392,7 @@ export const GRNTable = ({
               {`Issue: ${val === 'qcOnly' ? 'QC Only' : val === 'qtyOnly' ? 'Quantity Only' : 'Both Issues'}`}
               <button
                 onClick={() => onFilterChange('issueType', val)}
-                className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
+                className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-gray-600 hover:text-white hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors text-base font-bold p-0"
                 aria-label={`Remove ${val}`}
                 tabIndex={0}
                 style={{ lineHeight: 1, fontSize: '14px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -406,15 +406,15 @@ export const GRNTable = ({
       {filterSummary}
       {/* Data Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50 sticky top-0 z-10 shadow">
             <tr>
               {/* 1. ITEM IDENTIFICATION */}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('S.No')}>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('S.No')}>
                 S.No {getSortIndicator('S.No')}
               </th>
               {showSkuData && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('SKU Data')}>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('SKU Data')}>
                   {skuDataHeader} {getSortIndicator('SKU Data')}
                 </th>
               )}
@@ -515,7 +515,7 @@ export const GRNTable = ({
                   <td className={
                     (item["BinLocations"] && item["BinLocations"].length > 0)
                       ? "px-6 py-4 whitespace-nowrap text-sm text-blue-900 cursor-pointer underline"
-                      : "px-6 py-4 whitespace-nowrap text-sm text-gray-400"
+                      : "px-6 py-4 whitespace-nowrap text-sm text-gray-600"
                   } 
                     onClick={() => {
                       if (item["BinLocations"] && item["BinLocations"].length > 0) {

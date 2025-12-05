@@ -88,13 +88,21 @@ export const TEST_DATA_TEMPLATES = {
   }
 };
 
-// Default values for dropdowns
+// Default values for dropdowns (fallback if admin storage is empty)
 export const DEFAULT_VALUES = {
   warehouseNos: ["WH-MUM-01"],
   qcPersons: ["Abhishek", "LuvKush", "Sandeep", "Kuldeep", "Suraj", "Krish"],
   supervisors: ["Noorul Sheikh", "Preetam Yadav"],
   warehouseManagers: ["Shoeb Sheikh"],
 };
+
+// Get team members from Supabase or fallback to defaults
+// This is now async, so we handle it in the component
+export function getTeamMembersForApp() {
+  // Return defaults as fallback
+  // Actual loading happens in App.jsx using async getTeamMembers from supabaseTeamStorage
+  return DEFAULT_VALUES;
+}
 
 // Initial GRN header info
 export const INITIAL_GRN_HEADER = {
