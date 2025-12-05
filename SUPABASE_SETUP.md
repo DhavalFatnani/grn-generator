@@ -118,6 +118,15 @@ CREATE POLICY "Admins are viewable by authenticated users" ON admins
 -- Allow insert for service role only (or specific admin users)
 CREATE POLICY "Admins are insertable by service role" ON admins
   FOR INSERT WITH CHECK (true);
+
+-- Allow update for password changes (required for changeAdminPassword function)
+CREATE POLICY "Admins can update their own password" ON admins
+  FOR UPDATE USING (true)
+  WITH CHECK (true);
+
+-- Allow delete for service role only (optional, for admin management)
+CREATE POLICY "Admins are deletable by service role" ON admins
+  FOR DELETE USING (true);
 ```
 
 ### Team Members Table

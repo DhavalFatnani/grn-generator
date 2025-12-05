@@ -207,20 +207,28 @@ export async function deleteGRNLog(id) {
 // Clear all GRN logs
 export async function clearAllGRNLogs() {
   try {
-    // Delete all data
-    await supabase
+    // Delete all data first (child records)
+    // Use a valid UUID that will never exist to match all rows
+    const { error: dataError } = await supabase
       .from(TABLES.GRN_DATA)
       .delete()
-      .neq('id', 0);
+      .neq('id', '00000000-0000-0000-0000-000000000000');
 
-    // Delete all logs
-    const { error } = await supabase
+    if (dataError) {
+      console.error('Error deleting GRN data:', dataError);
+      return { success: false, error: dataError.message };
+    }
+
+    // Delete all logs (parent records)
+    // Use a valid UUID that will never exist to match all rows
+    const { error: logsError } = await supabase
       .from(TABLES.GRN_LOGS)
       .delete()
-      .neq('id', 0);
+      .neq('id', '00000000-0000-0000-0000-000000000000');
 
-    if (error) {
-      return { success: false, error: error.message };
+    if (logsError) {
+      console.error('Error deleting GRN logs:', logsError);
+      return { success: false, error: logsError.message };
     }
 
     return { success: true };
