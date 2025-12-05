@@ -76,6 +76,7 @@ html, body {
   transition: box-shadow 0.3s ease;
 }
 
+.main-content:hover {
   box-shadow: 0 12px 48px 0 rgba(30,41,59,0.15);
 }
 
@@ -139,6 +140,7 @@ input, select, textarea {
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
+input:hover, select:hover, textarea:hover {
   border-color: #9ca3af;
   box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.08);
 }
@@ -168,11 +170,13 @@ button, .btn {
   letter-spacing: 0.01em;
 }
 
+.btn-primary:hover {
   background: #1d4ed8;
   box-shadow: 0 6px 20px 0 rgba(37,99,235,0.25);
   transform: translateY(-2px);
 }
 
+.btn-primary:active {
   transform: translateY(0);
   box-shadow: 0 2px 8px 0 rgba(37,99,235,0.15);
 }
@@ -324,11 +328,13 @@ header * {
   font-size: 20px;
 }
 
+.fab-button:hover {
   background: #1d4ed8;
   box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
   transform: translateY(-2px);
 }
 
+.fab-button:active {
   transform: translateY(0);
 }
 
@@ -373,6 +379,7 @@ header * {
   width: 100%;
 }
 
+.fab-menu-item:hover {
   background: #f3f4f6;
   color: #1f2937;
 }
@@ -396,6 +403,7 @@ header * {
 }
 
 /* Mobile Responsive */
+@media (max-width: 768px) {
   .sticky-export-bar {
     bottom: 1rem;
     right: 1rem;
@@ -413,6 +421,7 @@ header * {
   }
 }
 
+@media (max-width: 480px) {
   .sticky-export-bar {
     bottom: 0.75rem;
     right: 0.75rem;
@@ -544,35 +553,12 @@ header > div {
   background-color: #f9fafb !important;
 }
 
-
+.admin-dashboard table thead th {
   background-color: #374151 !important;
   background-image: none !important;
   color: #d1d5db !important;
   border-color: #4b5563 !important;
   border-bottom-color: #4b5563 !important;
-}
-
-  background-color: #374151 !important;
-}
-
-  background-color: #374151 !important;
-  background-image: none !important;
-  color: #d1d5db !important;
-}
-
-  background-color: #374151 !important;
-}
-
-  background-color: transparent !important;
-  color: #e5e7eb !important;
-  border-color: #374151 !important;
-  border-bottom-color: #374151 !important;
-}
-
-  background-color: transparent !important;
-}
-
-  background-color: transparent !important;
 }
 
 /* Admin Dashboard Table Hover - Elevation Effect (No Background Change) */
@@ -586,187 +572,8 @@ header > div {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   z-index: 1;
 }
-
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 1;
-}
-
 /* Ensure no background color change on hover */
+.admin-dashboard table tbody tr:hover td {
   background: transparent !important;
   background-color: transparent !important;
 }
-
-  background: transparent !important;
-  background-color: transparent !important;
-}
-
-  background-color: transparent !important;
-}
-
-/* Override any global hover background rules */
-  background-color: transparent !important;
-}
-
-  background-color: transparent !important;
-}
-
-  background-color: transparent !important;
-}
-
-  background-color: transparent !important;
-}
-
-
-  color: #f9fafb;
-  border-color: #4b5563;
-  font-weight: 600;
-}
-
-  border-color: #374151;
-}
-
-}
-
-}
-
-/* Admin dashboard must override this - placed after global rule */
-  background: #374151 !important;
-}
-
-
-  color: #34d399;
-  border-color: #047857;
-}
-
-  color: #fbbf24;
-  border-color: #b45309;
-}
-
-  color: #f87171;
-  border-color: #dc2626;
-}
-
-  color: #a78bfa;
-  border-color: #8b5cf6;
-}
-
-  color: #9ca3af;
-  border-color: #4b5563;
-}
-
-
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
-}
-
-  border: 1px solid #374151;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-}
-
-  color: #f9fafb;
-}
-
-}
-
-  color: #fca5a5;
-}
-
-
-}
-
-}
-
-}
-
-}
-
-}
-
-}
-
-}
-
-}
-
-}
-
-}
-
-
-}
-
-}
-
-}
-
-
-}
-
-}
-
-
-  border-radius: 5px;
-}
-
-  border-radius: 5px;
-  border: 2px solid #1f2937;
-}
-
-}
-
-
-}
-
-
-
-}
-
-}
-
-}
-
-}
-
-
-}
-
-}
-
-}
-
-
-}
-
-}
-
-}
-
-
-}
-
-}
-
-
-}
-
-}
-
-
-}
-
-
-}
-
-}
-
-}
-
-
-
-
-
-
-
-
-/* Fix missing closing brace */
