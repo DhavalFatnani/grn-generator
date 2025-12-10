@@ -52,10 +52,16 @@ export const detectColumns = (headers, fileType) => {
   
   if (!mappings) return detected;
   
+  // Normalize headers for case-insensitive matching
+  const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
+  
   Object.entries(mappings).forEach(([key, possibleNames]) => {
     for (const name of possibleNames) {
-      if (headers.includes(name)) {
-        detected[key] = name;
+      const normalizedName = name.toLowerCase().trim();
+      const headerIndex = normalizedHeaders.indexOf(normalizedName);
+      if (headerIndex !== -1) {
+        // Use the original header name (preserving case) from headers array
+        detected[key] = headers[headerIndex];
         break;
       }
     }

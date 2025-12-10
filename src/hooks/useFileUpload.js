@@ -130,7 +130,9 @@ export const useFileUpload = () => {
       })
       .filter(obj => {
         if (fileType === 'purchaseOrder') {
-          return obj['Sno'] && obj['Sno'] !== '';
+          // Case-insensitive check for Sno column
+          const snoKey = Object.keys(obj).find(key => key.toLowerCase().trim() === 'sno');
+          return snoKey && obj[snoKey] && obj[snoKey] !== '';
         }
         // For putAway and qcFail, allow all rows after header
         return Object.values(obj).some(val => val && val !== '');
@@ -263,7 +265,9 @@ export const useFileUpload = () => {
       })
       .filter(obj => {
         if (fileType === 'purchaseOrder') {
-          return obj["Sno"] && obj["Sno"] !== "";
+          // Case-insensitive check for Sno column
+          const snoKey = Object.keys(obj).find(key => key.toLowerCase().trim() === 'sno');
+          return snoKey && obj[snoKey] && obj[snoKey] !== "";
         }
         // For putAway and qcFail, allow all rows after header
         return Object.values(obj).some(val => val && val !== "");
